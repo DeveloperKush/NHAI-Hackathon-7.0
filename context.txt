@@ -29,12 +29,29 @@ Pipeline: Camera → MediaPipe Face Mesh (liveness) → CLAHE/Align → MobileFa
 - MAR_INDICES = [61, 291, 13, 14]
 - LIVENESS_THRESHOLDS = { EAR: 0.2, MAR: 0.6, headYaw: 0.15 }
 
+### Database & Encryption (src/services/database/ & src/services/encryption/)
+- sqlite.ts:
+  - executeSql(sql: string, params?: any[]): Promise<any>
+  - initDatabase(): Promise<void>
+- secureStorage.ts:
+  - getOrCreateEncryptionKey(): Promise<string>
+  - encryptData(plainText: string): string
+  - decryptData(cipherText: string): string
+- enrolledFaces.ts:
+  - insertEnrolledFace(user_id: string, embedding: Float32Array): Promise<void>
+  - getAllEnrolledFaces(): Promise<{user_id: string, embedding: Float32Array}[]>
+  - deleteEnrolledFace(user_id: string): Promise<void>
+- authLogs.ts:
+  - insertAuthLog(log: AuthLog): Promise<void>
+  - getUnsyncedLogs(): Promise<AuthLog[]>
+  - deleteSyncedLogs(log_ids: string[]): Promise<void>
+
 ## 4. Implementation Status
 | Phase | Status | Files |
 |-------|--------|-------|
 | 0. Scaffolding | DONE | package.json, app.json, eas.json, tsconfig.json, .env.example, full src/ tree |
 | 1. Types | DONE | src/types/index.ts, constants/* |
-| 2. Database | NOT_STARTED | sqlite.ts, secureStorage.ts, enrolledFaces.ts, authLogs.ts |
+| 2. Database | DONE | sqlite.ts, secureStorage.ts, enrolledFaces.ts, authLogs.ts |
 | 3. Mock AWS | NOT_STARTED | mock-aws-server/server.js |
 | 4. Network/Sync | NOT_STARTED | connectionInfo.ts, awsSync.ts, useNetworkStatus.ts |
 | 5. Preprocessing | NOT_STARTED | imagePreProc.ts, math.ts |
@@ -53,13 +70,14 @@ Pipeline: Camera → MediaPipe Face Mesh (liveness) → CLAHE/Align → MobileFa
 - Encryption: AES-256 via react-native-encrypted-storage
 - Phase 0 complete. Expo SDK 50 scaffold with all placeholder files. Strict TypeScript enabled.
 - Phase 1 complete. All types strict-checked. No runtime code yet.
+- Phase 2 complete. expo-sqlite used for MVP. Embeddings encrypted AES-256. Purge rule: delete only after HTTP 200.
 
 ## 6. Pending Risks
 - MediaPipe WASM may be slow on iOS 12 → upgrade to react-native-fast-tflite (Option B) post-MVP
 - INT8 model not yet bundled → using deterministic pseudo-embeddings for MVP
 
 ## 7. Next Step
-Phase 2: SQLite Database Layer.
+Phase 3: Mock AWS Server.
 
 ## 8. Handoff Rules for Teammates
 - Read this file first before any new prompt.
