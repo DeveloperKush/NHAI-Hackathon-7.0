@@ -142,8 +142,8 @@ Expected response:
 | 4. Network/Sync | ✅ DONE | connectionInfo.ts, awsSync.ts, useNetworkStatus.ts |
 | 5. Preprocessing | ✅ DONE | imagePreProc.ts, math.ts |
 | 6. Liveness | ✅ DONE | MediaPipe Face Mesh EAR/MAR challenge detection |
-| 7. Recognition | 🔲 Next | MobileFaceNet INT8 cosine similarity matching |
-| 8. Camera/Hook | 🔲 Pending | frameProcessors.ts, useAuth.ts |
+| 7. Recognition | ✅ DONE | MobileFaceNet INT8 cosine similarity matching |
+| 8. Camera/Hook | 🔲 Next | frameProcessors.ts, useAuth.ts |
 | 9. UI Overlay | 🔲 Pending | CameraOverlay, LivenessFeedback, FaceAuthenticator |
 | 10. Enrollment | 🔲 Pending | EnrollmentScreen.tsx |
 | 11. Demo | 🔲 Pending | DemoAuthScreen.tsx, App.tsx |
@@ -159,5 +159,7 @@ Expected response:
 - **Zero-Loss Purge**: deleteSyncedLogs is ONLY invoked after HTTP 200 with received_logs array is confirmed
 - **Pure Preprocessing**: No side effects, no React Native/Native UI context dependencies, ensuring high-speed math checks and simple testability
 - **Liveness Validation**: 4-factor validation (EAR blink, MAR smile, head yaw asymmetry, and passive 3D depth check) with randomized challenge order, running on-device for spoof resistance.
+- **Face Recognition MVP**: Uses a deterministic region-intensity mean and gradient feature pseudo-embedding of 512 dimensions, with clear upgrade path documented to react-native-fast-tflite and MobileFaceNet INT8.
+
 
 - **Open-Source Only**: All dependencies are Apache 2.0 / MIT / BSD licensed

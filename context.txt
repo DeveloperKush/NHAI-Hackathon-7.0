@@ -76,6 +76,11 @@ Pipeline: Camera → MediaPipe Face Mesh (liveness) → CLAHE/Align → MobileFa
   - Random challenge order determined at initialization.
   - Passive 3D depth check runs on every frame.
 
+### Face Recognition (src/services/ai/recognition.ts)
+- extractEmbedding(imageData: Float32Array): Float32Array (512-d, deterministic)
+- findBestMatch(embedding: Float32Array, enrolledFaces: {user_id: string, embedding: Float32Array}[]): {user_id: string | null, score: number}
+- generateDeviceId(): string
+
 ### Mock Server Contract (mock-aws-server/server.js)
 - Endpoint: POST /api/sync
 - Request: { logs: AuthLog[] }
@@ -93,7 +98,7 @@ Pipeline: Camera → MediaPipe Face Mesh (liveness) → CLAHE/Align → MobileFa
 | 4. Network/Sync | DONE | connectionInfo.ts, awsSync.ts, useNetworkStatus.ts |
 | 5. Preprocessing | DONE | imagePreProc.ts, math.ts |
 | 6. Liveness | DONE | liveness.ts |
-| 7. Recognition | NOT_STARTED | recognition.ts |
+| 7. Recognition | DONE | recognition.ts |
 | 8. Camera/Hook | NOT_STARTED | frameProcessors.ts, useAuth.ts |
 | 9. UI Overlay | NOT_STARTED | CameraOverlay.tsx, LivenessFeedback.tsx, FaceAuthenticator.tsx |
 | 10. Enrollment Screen | NOT_STARTED | EnrollmentScreen.tsx |
@@ -112,13 +117,14 @@ Pipeline: Camera → MediaPipe Face Mesh (liveness) → CLAHE/Align → MobileFa
 - Phase 4 complete. Zero-loss purge: deleteSyncedLogs only after HTTP 200 confirmed.
 - Phase 5 complete. Pure utilities. CLAHE + global hist eq for Indian outdoor lighting.
 - Phase 6 complete. 4-factor liveness: EAR blink, MAR smile, head yaw, 3D depth. Random challenge order.
+- Phase 7 complete. MVP uses deterministic pseudo-embeddings. Upgrade path documented.
 
 ## 6. Pending Risks
 - MediaPipe WASM may be slow on iOS 12 → upgrade to react-native-fast-tflite (Option B) post-MVP
 - INT8 model not yet bundled → using deterministic pseudo-embeddings for MVP
 
 ## 7. Next Step
-Phase 7: Face Recognition Engine.
+Phase 8: Camera Frame Processor & Auth Hook.
 
 ## 8. Handoff Rules for Teammates
 - Read this file first before any new prompt.
