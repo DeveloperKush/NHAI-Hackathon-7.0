@@ -45,6 +45,12 @@ A local Express server (`mock-aws-server/`) that simulates the cloud batch-sync 
 - **Purge Safety**: Client must receive HTTP 200 before deleting local rows. On 4xx/5xx the queue is retained and retried.
 - **Health Check**: `GET /health` returns server status and count of seen log IDs.
 
+### 5. Network Monitoring & Zero-Loss Sync
+Network observation and synchronization layer located in `src/services/network/` and `src/hooks/`:
+- **Network Status Hook (`useNetworkStatus`)**: Detects network connectivity changes, exposing `isConnected` and `connectionType` state.
+- **Auto-Sync Listener (`triggerSyncOnConnect`)**: Subscribes to connection state events and automatically schedules logs syncing when transitioning back online.
+- **Zero-Loss Sync Logic (`syncAuthLogs`)**: Performs cloud logs dispatching. It verifies connectivity, checks logs availability, POSTs the queue in a batch, checks for HTTP 200 containing successfully processed log IDs, and only then executes a local delete purge.
+
 ---
 
 ## Database Schemas
@@ -88,6 +94,9 @@ The test suite validates:
 - Generating and caching secure AES-256 keys.
 - Inserting a 512-dimensional face embedding, encrypting it, database storage, retrieval, decryption, and reconstructing the exact Float32Array dimensions.
 - Logging local authentications, validating unsynced lists, and cleaning entries post-sync.
+- Network status monitoring (detecting online/offline status via netinfo).
+- Zero-loss sync behavior (logs syncing successfully on HTTP 200 and keeping data intact on network/server error).
+- Auto-sync trigger on hook connect.
 
 ### 3. Run Mock AWS Server
 ```bash
@@ -121,8 +130,8 @@ Expected response:
 | 1. Types | ✅ DONE | src/types/index.ts, constants/* |
 | 2. Database | ✅ DONE | SQLite + AES-256 encrypted face & log storage |
 | 3. Mock AWS Server | ✅ DONE | Express server, idempotent sync endpoint |
-| 4. Network/Sync | 🔲 Next | connectionInfo.ts, awsSync.ts, useNetworkStatus.ts |
-| 5. Preprocessing | 🔲 Pending | imagePreProc.ts, math.ts |
+| 4. Network/Sync | ✅ DONE | connectionInfo.ts, awsSync.ts, useNetworkStatus.ts |
+| 5. Preprocessing | 🔲 Next | imagePreProc.ts, math.ts |
 | 6. Liveness | 🔲 Pending | MediaPipe Face Mesh EAR/MAR challenge detection |
 | 7. Recognition | 🔲 Pending | MobileFaceNet INT8 cosine similarity matching |
 | 8. Camera/Hook | 🔲 Pending | frameProcessors.ts, useAuth.ts |
@@ -138,4 +147,5 @@ Expected response:
 - **Encryption**: AES-256 via `react-native-encrypted-storage` — key generated once, persisted in hardware-backed store
 - **Sync Purge Rule**: Local rows are NEVER deleted until HTTP 200 is confirmed from server
 - **Idempotency**: Server tracks `log_id` in memory; client can safely retry failed batches
+- **Zero-Loss Purge**: deleteSyncedLogs is ONLY invoked after HTTP 200 with received_logs array is confirmed
 - **Open-Source Only**: All dependencies are Apache 2.0 / MIT / BSD licensed
