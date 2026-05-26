@@ -93,6 +93,11 @@ Pipeline: Camera → MediaPipe Face Mesh (liveness) → CLAHE/Align → MobileFa
 - Color Tokens: Primary=#1a237e, Background=#ffffff, Surface=#f5f5f5, Success=#4caf50, Error=#f44336, Warning=#ff9800, TextPrimary=#212121, TextSecondary=#757575
 - Enrollment flow — capture 3-5 frames, average embeddings, insertEnrolledFace.
 
+### Main Application & Demo (src/screens/ & src/App.tsx)
+- Stack Navigation: DemoAuthScreen (initial), EnrollmentScreen stack entry.
+- useNetworkStatus global listener in App.tsx: auto-sync triggers on CONNECTED network state.
+- DemoAuthScreen layout: embeds FaceAuthenticator, scrollable recent logs from SQLite, detailed success card displaying nullable GPS, similarity score and time, and network-aware manual Sync Now button.
+
 
 ### Mock Server Contract (mock-aws-server/server.js)
 - Endpoint: POST /api/sync
@@ -115,7 +120,7 @@ Pipeline: Camera → MediaPipe Face Mesh (liveness) → CLAHE/Align → MobileFa
 | 8. Camera/Hook | DONE | frameProcessors.ts, useAuth.ts |
 | 9. UI Overlay | DONE | CameraOverlay.tsx, LivenessFeedback.tsx, FaceAuthenticator.tsx |
 | 10. Enrollment Screen | DONE | EnrollmentScreen.tsx |
-| 11. Demo Screen | NOT_STARTED | DemoAuthScreen.tsx, App.tsx |
+| 11. Demo Screen | DONE | DemoAuthScreen.tsx, App.tsx |
 | 12. Polish | NOT_STARTED | README, ARCHITECTURE.md |
 
 ## 5. Key Decisions Log
@@ -134,13 +139,14 @@ Pipeline: Camera → MediaPipe Face Mesh (liveness) → CLAHE/Align → MobileFa
 - Phase 8 complete. MVP uses expo-camera snapshot mode. Simulated landmarks for MVP.
 - Phase 9 complete. Enterprise color palette. Haptics integrated. Safe area respected.
 - Phase 10 complete. Enrollment averages 3-5 frame embeddings. Stepper UI for admin clarity.
+- Phase 11 complete. E2E flow tested: enroll → auth → log → sync → purge.
 
 ## 6. Pending Risks
 - MediaPipe WASM may be slow on iOS 12 → upgrade to react-native-fast-tflite (Option B) post-MVP
 - INT8 model not yet bundled → using deterministic pseudo-embeddings for MVP
 
 ## 7. Next Step
-Phase 11: Demo Auth Screen & App Entry.
+Phase 12: Final Integration, README & Polish.
 
 ## 8. Handoff Rules for Teammates
 - Read this file first before any new prompt.

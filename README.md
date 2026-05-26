@@ -153,8 +153,8 @@ Expected response:
 | 8. Camera/Hook | ✅ DONE | frameProcessors.ts, useAuth.ts |
 | 9. UI Overlay | ✅ DONE | CameraOverlay, LivenessFeedback, FaceAuthenticator |
 | 10. Enrollment | ✅ DONE | EnrollmentScreen.tsx |
-| 11. Demo | 🔲 Next | DemoAuthScreen.tsx, App.tsx |
-| 12. Polish | 🔲 Pending | ARCHITECTURE.md |
+| 11. Demo | ✅ DONE | DemoAuthScreen.tsx, App.tsx |
+| 12. Polish | 🔲 Next | ARCHITECTURE.md |
 
 ---
 
@@ -169,5 +169,6 @@ Expected response:
 - **Face Recognition MVP**: Uses a deterministic region-intensity mean and gradient feature pseudo-embedding of 512 dimensions, with clear upgrade path documented to react-native-fast-tflite and MobileFaceNet INT8.
 - **UI & Feedback Overlay**: Implemented CameraOverlay with custom cutout and dynamic pulsing status colors, top-aligned LivenessFeedback banner, status pill transitions, and integrated haptic feedback styles.
 - **Admin Enrollment Screen**: Integrated stepper (Capture ➔ Processing ➔ Saved), horizontal scrollable frame viewer with processed checkmarks, user_id uniqueness verification against SQLite database, multi-frame (3-5) embedding averaging with L2-normalization, and encrypted SQLite persistence.
+- **Main Application & Demo Auth Screen**: Embedded the compact FaceAuthenticator card, added success cards displaying nullable GPS coordinates and scores, created a scrollable recent logs SQLite view, configured stack-based navigation (DemoAuthScreen and EnrollmentScreen), and set up global network auto-sync hooks.
 
 - **Open-Source Only**: All dependencies are Apache 2.0 / MIT / BSD licensed
