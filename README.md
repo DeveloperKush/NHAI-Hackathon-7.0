@@ -51,6 +51,15 @@ Network observation and synchronization layer located in `src/services/network/`
 - **Auto-Sync Listener (`triggerSyncOnConnect`)**: Subscribes to connection state events and automatically schedules logs syncing when transitioning back online.
 - **Zero-Loss Sync Logic (`syncAuthLogs`)**: Performs cloud logs dispatching. It verifies connectivity, checks logs availability, POSTs the queue in a batch, checks for HTTP 200 containing successfully processed log IDs, and only then executes a local delete purge.
 
+### 6. Image Preprocessing & Math Utilities
+Pure utilities with zero external dependencies to ensure fast execution and consistent math behavior located under `src/utils/`:
+- **Contrast Limited Adaptive Histogram Equalization (CLAHE)**: Enhances local contrast in 8x8 tiles using bilinear interpolation, preventing poor detection under varying Indian outdoor lighting conditions.
+- **Global Histogram Equalization**: Provides global contrast enhancement by redistributing pixel intensity distributions.
+- **Pixel Normalization**: Normalizes pixel values from `[0, 255]` to `[-1.0, 1.0]`.
+- **Bilinear Crop & Resize (`cropTo112x112`)**: Extracts face bounding box coordinates and rescales them to a standard `112x112` size using bilinear interpolation, then normalizes the output.
+- **Vector Cosine Similarity**: Compares Float32Array face embeddings to evaluate matching authenticity scores.
+- **Vector L2 Normalization**: Scales face embeddings to unit L2 length.
+
 ---
 
 ## Database Schemas
@@ -131,8 +140,8 @@ Expected response:
 | 2. Database | ✅ DONE | SQLite + AES-256 encrypted face & log storage |
 | 3. Mock AWS Server | ✅ DONE | Express server, idempotent sync endpoint |
 | 4. Network/Sync | ✅ DONE | connectionInfo.ts, awsSync.ts, useNetworkStatus.ts |
-| 5. Preprocessing | 🔲 Next | imagePreProc.ts, math.ts |
-| 6. Liveness | 🔲 Pending | MediaPipe Face Mesh EAR/MAR challenge detection |
+| 5. Preprocessing | ✅ DONE | imagePreProc.ts, math.ts |
+| 6. Liveness | 🔲 Next | MediaPipe Face Mesh EAR/MAR challenge detection |
 | 7. Recognition | 🔲 Pending | MobileFaceNet INT8 cosine similarity matching |
 | 8. Camera/Hook | 🔲 Pending | frameProcessors.ts, useAuth.ts |
 | 9. UI Overlay | 🔲 Pending | CameraOverlay, LivenessFeedback, FaceAuthenticator |
@@ -148,4 +157,5 @@ Expected response:
 - **Sync Purge Rule**: Local rows are NEVER deleted until HTTP 200 is confirmed from server
 - **Idempotency**: Server tracks `log_id` in memory; client can safely retry failed batches
 - **Zero-Loss Purge**: deleteSyncedLogs is ONLY invoked after HTTP 200 with received_logs array is confirmed
+- **Pure Preprocessing**: No side effects, no React Native/Native UI context dependencies, ensuring high-speed math checks and simple testability
 - **Open-Source Only**: All dependencies are Apache 2.0 / MIT / BSD licensed

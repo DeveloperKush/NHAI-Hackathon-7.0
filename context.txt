@@ -53,6 +53,16 @@ Pipeline: Camera → MediaPipe Face Mesh (liveness) → CLAHE/Align → MobileFa
 - connectionInfo.ts:
   - useNetworkStatus(): returns { isConnected: boolean, connectionType: string }
 
+### Image Preprocessing & Math (src/utils/)
+- imagePreProc.ts:
+  - applyCLAHE(imageData: Uint8Array, width: number, height: number): Uint8Array — enhances local contrast in 8x8 tiles.
+  - globalHistogramEqualization(imageData: Uint8Array): Uint8Array — performs global equalization.
+  - normalizePixels(imageData: Uint8Array): Float32Array — maps [0, 255] to [-1.0, 1.0].
+  - cropTo112x112(imageData: Uint8Array, faceBoundingBox: { x: number; y: number; w: number; h: number }, originalWidth: number, originalHeight: number): Float32Array — crops & resizes using bilinear interpolation.
+- math.ts:
+  - cosineSimilarity(a: Float32Array, b: Float32Array): number — dot(a, b) / (norm(a) * norm(b)).
+  - l2Normalize(vec: Float32Array): Float32Array — normalizes vector to unit L2 norm.
+
 ### Mock Server Contract (mock-aws-server/server.js)
 - Endpoint: POST /api/sync
 - Request: { logs: AuthLog[] }
@@ -68,7 +78,7 @@ Pipeline: Camera → MediaPipe Face Mesh (liveness) → CLAHE/Align → MobileFa
 | 2. Database | DONE | sqlite.ts, secureStorage.ts, enrolledFaces.ts, authLogs.ts |
 | 3. Mock AWS | DONE | mock-aws-server/server.js, mock-aws-server/package.json, mock-aws-server/README.md |
 | 4. Network/Sync | DONE | connectionInfo.ts, awsSync.ts, useNetworkStatus.ts |
-| 5. Preprocessing | NOT_STARTED | imagePreProc.ts, math.ts |
+| 5. Preprocessing | DONE | imagePreProc.ts, math.ts |
 | 6. Liveness | NOT_STARTED | liveness.ts |
 | 7. Recognition | NOT_STARTED | recognition.ts |
 | 8. Camera/Hook | NOT_STARTED | frameProcessors.ts, useAuth.ts |
@@ -87,13 +97,14 @@ Pipeline: Camera → MediaPipe Face Mesh (liveness) → CLAHE/Align → MobileFa
 - Phase 2 complete. expo-sqlite used for MVP. Embeddings encrypted AES-256. Purge rule: delete only after HTTP 200.
 - Phase 3 complete. Mock server enforces idempotent log_id and exact 200 response for purge.
 - Phase 4 complete. Zero-loss purge: deleteSyncedLogs only after HTTP 200 confirmed.
+- Phase 5 complete. Pure utilities. CLAHE + global hist eq for Indian outdoor lighting.
 
 ## 6. Pending Risks
 - MediaPipe WASM may be slow on iOS 12 → upgrade to react-native-fast-tflite (Option B) post-MVP
 - INT8 model not yet bundled → using deterministic pseudo-embeddings for MVP
 
 ## 7. Next Step
-Phase 5: Image Preprocessing Utilities.
+Phase 6: Liveness Detection Engine.
 
 ## 8. Handoff Rules for Teammates
 - Read this file first before any new prompt.
