@@ -1,5 +1,6 @@
 # Dependencies
 node_modules/
+mock-aws-server/node_modules/
 
 # Logs
 npm-debug.log*

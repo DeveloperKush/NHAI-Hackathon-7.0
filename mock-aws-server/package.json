@@ -1,0 +1,13 @@
+{
+  "name": "mock-aws-server",
+  "version": "1.0.0",
+  "description": "Mock AWS sync server for NHAI Hackathon 7.0 — Binary Brains",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "license": "MIT"
+}
