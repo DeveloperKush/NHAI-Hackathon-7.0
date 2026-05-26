@@ -63,6 +63,19 @@ Pipeline: Camera → MediaPipe Face Mesh (liveness) → CLAHE/Align → MobileFa
   - cosineSimilarity(a: Float32Array, b: Float32Array): number — dot(a, b) / (norm(a) * norm(b)).
   - l2Normalize(vec: Float32Array): Float32Array — normalizes vector to unit L2 norm.
 
+### Liveness Detection (src/services/ai/liveness.ts)
+- calculateEAR(leftEye: Landmark[], rightEye: Landmark[]): number
+- calculateMAR(lips: Landmark[]): number
+- calculateHeadYaw(nose: Landmark, leftCheek: Landmark, rightCheek: Landmark): number
+- checkDepthConsistency(landmarks: Landmark[], threshold?: number): boolean
+- getPromptForState(state: LivenessState): string | null
+- LivenessEngine:
+  - processFrame(landmarks: Landmark[]): { state: LivenessState, prompt: string | null }
+  - States: 'READY' | 'WAITING_BLINK' | 'WAITING_SMILE' | 'WAITING_HEAD_TURN' | 'PASSED' | 'FAILED'
+  - Timeout: active challenges fail after 10s of inactivity.
+  - Random challenge order determined at initialization.
+  - Passive 3D depth check runs on every frame.
+
 ### Mock Server Contract (mock-aws-server/server.js)
 - Endpoint: POST /api/sync
 - Request: { logs: AuthLog[] }
@@ -79,7 +92,7 @@ Pipeline: Camera → MediaPipe Face Mesh (liveness) → CLAHE/Align → MobileFa
 | 3. Mock AWS | DONE | mock-aws-server/server.js, mock-aws-server/package.json, mock-aws-server/README.md |
 | 4. Network/Sync | DONE | connectionInfo.ts, awsSync.ts, useNetworkStatus.ts |
 | 5. Preprocessing | DONE | imagePreProc.ts, math.ts |
-| 6. Liveness | NOT_STARTED | liveness.ts |
+| 6. Liveness | DONE | liveness.ts |
 | 7. Recognition | NOT_STARTED | recognition.ts |
 | 8. Camera/Hook | NOT_STARTED | frameProcessors.ts, useAuth.ts |
 | 9. UI Overlay | NOT_STARTED | CameraOverlay.tsx, LivenessFeedback.tsx, FaceAuthenticator.tsx |
@@ -98,13 +111,14 @@ Pipeline: Camera → MediaPipe Face Mesh (liveness) → CLAHE/Align → MobileFa
 - Phase 3 complete. Mock server enforces idempotent log_id and exact 200 response for purge.
 - Phase 4 complete. Zero-loss purge: deleteSyncedLogs only after HTTP 200 confirmed.
 - Phase 5 complete. Pure utilities. CLAHE + global hist eq for Indian outdoor lighting.
+- Phase 6 complete. 4-factor liveness: EAR blink, MAR smile, head yaw, 3D depth. Random challenge order.
 
 ## 6. Pending Risks
 - MediaPipe WASM may be slow on iOS 12 → upgrade to react-native-fast-tflite (Option B) post-MVP
 - INT8 model not yet bundled → using deterministic pseudo-embeddings for MVP
 
 ## 7. Next Step
-Phase 6: Liveness Detection Engine.
+Phase 7: Face Recognition Engine.
 
 ## 8. Handoff Rules for Teammates
 - Read this file first before any new prompt.

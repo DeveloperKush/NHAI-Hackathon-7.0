@@ -141,8 +141,8 @@ Expected response:
 | 3. Mock AWS Server | ✅ DONE | Express server, idempotent sync endpoint |
 | 4. Network/Sync | ✅ DONE | connectionInfo.ts, awsSync.ts, useNetworkStatus.ts |
 | 5. Preprocessing | ✅ DONE | imagePreProc.ts, math.ts |
-| 6. Liveness | 🔲 Next | MediaPipe Face Mesh EAR/MAR challenge detection |
-| 7. Recognition | 🔲 Pending | MobileFaceNet INT8 cosine similarity matching |
+| 6. Liveness | ✅ DONE | MediaPipe Face Mesh EAR/MAR challenge detection |
+| 7. Recognition | 🔲 Next | MobileFaceNet INT8 cosine similarity matching |
 | 8. Camera/Hook | 🔲 Pending | frameProcessors.ts, useAuth.ts |
 | 9. UI Overlay | 🔲 Pending | CameraOverlay, LivenessFeedback, FaceAuthenticator |
 | 10. Enrollment | 🔲 Pending | EnrollmentScreen.tsx |
@@ -158,4 +158,6 @@ Expected response:
 - **Idempotency**: Server tracks `log_id` in memory; client can safely retry failed batches
 - **Zero-Loss Purge**: deleteSyncedLogs is ONLY invoked after HTTP 200 with received_logs array is confirmed
 - **Pure Preprocessing**: No side effects, no React Native/Native UI context dependencies, ensuring high-speed math checks and simple testability
+- **Liveness Validation**: 4-factor validation (EAR blink, MAR smile, head yaw asymmetry, and passive 3D depth check) with randomized challenge order, running on-device for spoof resistance.
+
 - **Open-Source Only**: All dependencies are Apache 2.0 / MIT / BSD licensed
