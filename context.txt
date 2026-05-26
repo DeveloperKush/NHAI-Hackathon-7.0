@@ -86,9 +86,11 @@ Pipeline: Camera → MediaPipe Face Mesh (liveness) → CLAHE/Align → MobileFa
 - simulateLandmarksFromFrame(frame: any, isRealFace: boolean): Landmark[] — generates 468 landmarks (real z-variance or flat spoof)
 - captureEnrollmentFrames(cameraRef: any, count?: number): Promise<string[]> — captures snapshots sequentially, returns base64 JPEG array
 
-### Auth Orchestration Hook (src/hooks/useAuth.ts)
-- useAuth(cameraRef, options) returns { status, logData, error, startAuth, reset }
-- status flow: idle -> scanning -> liveness -> matching -> authenticated/failed
+### UI Components (src/components/)
+- CameraOverlayProps: { cameraRef: React.RefObject<any>, status: LivenessState, children?: React.ReactNode }
+- LivenessFeedbackProps: { message: string, type: 'success' | 'error' | 'warning', onDismiss?: () => void }
+- FaceAuthenticatorProps: { onAuthSuccess: (log: AuthLog) => void, onLivenessFailed: (err: LivenessError) => void, onEnrollmentRequired: () => void, similarityThreshold?: number }
+- Color Tokens: Primary=#1a237e, Background=#ffffff, Surface=#f5f5f5, Success=#4caf50, Error=#f44336, Warning=#ff9800, TextPrimary=#212121, TextSecondary=#757575
 
 
 ### Mock Server Contract (mock-aws-server/server.js)
@@ -110,7 +112,7 @@ Pipeline: Camera → MediaPipe Face Mesh (liveness) → CLAHE/Align → MobileFa
 | 6. Liveness | DONE | liveness.ts |
 | 7. Recognition | DONE | recognition.ts |
 | 8. Camera/Hook | DONE | frameProcessors.ts, useAuth.ts |
-| 9. UI Overlay | NOT_STARTED | CameraOverlay.tsx, LivenessFeedback.tsx, FaceAuthenticator.tsx |
+| 9. UI Overlay | DONE | CameraOverlay.tsx, LivenessFeedback.tsx, FaceAuthenticator.tsx |
 | 10. Enrollment Screen | NOT_STARTED | EnrollmentScreen.tsx |
 | 11. Demo Screen | NOT_STARTED | DemoAuthScreen.tsx, App.tsx |
 | 12. Polish | NOT_STARTED | README, ARCHITECTURE.md |
@@ -129,13 +131,14 @@ Pipeline: Camera → MediaPipe Face Mesh (liveness) → CLAHE/Align → MobileFa
 - Phase 6 complete. 4-factor liveness: EAR blink, MAR smile, head yaw, 3D depth. Random challenge order.
 - Phase 7 complete. MVP uses deterministic pseudo-embeddings. Upgrade path documented.
 - Phase 8 complete. MVP uses expo-camera snapshot mode. Simulated landmarks for MVP.
+- Phase 9 complete. Enterprise color palette. Haptics integrated. Safe area respected.
 
 ## 6. Pending Risks
 - MediaPipe WASM may be slow on iOS 12 → upgrade to react-native-fast-tflite (Option B) post-MVP
 - INT8 model not yet bundled → using deterministic pseudo-embeddings for MVP
 
 ## 7. Next Step
-Phase 9: UI Components.
+Phase 10: Enrollment Screen.
 
 ## 8. Handoff Rules for Teammates
 - Read this file first before any new prompt.

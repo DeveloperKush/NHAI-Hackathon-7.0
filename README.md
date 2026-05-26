@@ -151,8 +151,8 @@ Expected response:
 | 6. Liveness | ✅ DONE | MediaPipe Face Mesh EAR/MAR challenge detection |
 | 7. Recognition | ✅ DONE | MobileFaceNet INT8 cosine similarity matching |
 | 8. Camera/Hook | ✅ DONE | frameProcessors.ts, useAuth.ts |
-| 9. UI Overlay | 🔲 Next | CameraOverlay, LivenessFeedback, FaceAuthenticator |
-| 10. Enrollment | 🔲 Pending | EnrollmentScreen.tsx |
+| 9. UI Overlay | ✅ DONE | CameraOverlay, LivenessFeedback, FaceAuthenticator |
+| 10. Enrollment | 🔲 Next | EnrollmentScreen.tsx |
 | 11. Demo | 🔲 Pending | DemoAuthScreen.tsx, App.tsx |
 | 12. Polish | 🔲 Pending | ARCHITECTURE.md |
 
@@ -167,6 +167,6 @@ Expected response:
 - **Pure Preprocessing**: No side effects, no React Native/Native UI context dependencies, ensuring high-speed math checks and simple testability
 - **Liveness Validation**: 4-factor validation (EAR blink, MAR smile, head yaw asymmetry, and passive 3D depth check) with randomized challenge order, running on-device for spoof resistance.
 - **Face Recognition MVP**: Uses a deterministic region-intensity mean and gradient feature pseudo-embedding of 512 dimensions, with clear upgrade path documented to react-native-fast-tflite and MobileFaceNet INT8.
-
+- **UI & Feedback Overlay**: Implemented CameraOverlay with custom cutout and dynamic pulsing status colors, top-aligned LivenessFeedback banner, status pill transitions, and integrated haptic feedback styles.
 
 - **Open-Source Only**: All dependencies are Apache 2.0 / MIT / BSD licensed

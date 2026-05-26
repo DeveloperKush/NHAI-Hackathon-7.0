@@ -61,6 +61,7 @@ function useAuth(cameraRef, options) {
     const [status, setStatusState] = (0, react_1.useState)('idle');
     const [logData, setLogData] = (0, react_1.useState)(null);
     const [error, setError] = (0, react_1.useState)(null);
+    const [prompt, setPrompt] = (0, react_1.useState)(null);
     const statusRef = (0, react_1.useRef)('idle');
     const isMountedRef = (0, react_1.useRef)(true);
     (0, react_1.useEffect)(() => {
@@ -81,6 +82,7 @@ function useAuth(cameraRef, options) {
         if (isMountedRef.current) {
             setLogData(null);
             setError(null);
+            setPrompt(null);
         }
     };
     const startAuth = async (isRealFace = true) => {
@@ -92,6 +94,7 @@ function useAuth(cameraRef, options) {
         if (isMountedRef.current) {
             setLogData(null);
             setError(null);
+            setPrompt(null);
         }
         try {
             // Capture the initial frame
@@ -153,6 +156,9 @@ function useAuth(cameraRef, options) {
                 const landmarks = (0, frameProcessors_1.simulateLandmarksFromFrame)(frame, isRealFace);
                 // Process landmarks in engine
                 const engineRes = livenessEngine.processFrame(landmarks);
+                if (isMountedRef.current) {
+                    setPrompt(engineRes.prompt);
+                }
                 if (engineRes.state === 'PASSED') {
                     success = true;
                     break;
@@ -167,6 +173,7 @@ function useAuth(cameraRef, options) {
                     const livenessError = { code, message };
                     if (isMountedRef.current) {
                         setError(livenessError);
+                        setPrompt(null);
                     }
                     setStatus('failed');
                     if (options?.onLivenessFailed) {
@@ -189,6 +196,7 @@ function useAuth(cameraRef, options) {
                 };
                 if (isMountedRef.current) {
                     setError(enrollError);
+                    setPrompt(null);
                 }
                 setStatus('failed');
                 if (options?.onEnrollmentRequired) {
@@ -254,6 +262,7 @@ function useAuth(cameraRef, options) {
                 };
                 if (isMountedRef.current) {
                     setError(matchError);
+                    setPrompt(null);
                 }
                 setStatus('failed');
                 if (options?.onLivenessFailed) {
@@ -269,6 +278,7 @@ function useAuth(cameraRef, options) {
             };
             if (isMountedRef.current) {
                 setError(pipelineErr);
+                setPrompt(null);
             }
             setStatus('failed');
             if (options?.onLivenessFailed) {
@@ -280,6 +290,7 @@ function useAuth(cameraRef, options) {
         status,
         logData,
         error,
+        prompt,
         startAuth,
         reset,
     };

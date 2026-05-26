@@ -36,6 +36,7 @@ export function useAuth(cameraRef: any, options?: UseAuthOptions) {
   const [status, setStatusState] = useState<'idle' | 'scanning' | 'liveness' | 'matching' | 'authenticated' | 'failed'>('idle');
   const [logData, setLogData] = useState<AuthLog | null>(null);
   const [error, setError] = useState<LivenessError | null>(null);
+  const [prompt, setPrompt] = useState<string | null>(null);
 
   const statusRef = useRef<any>('idle');
   const isMountedRef = useRef<boolean>(true);
@@ -60,6 +61,7 @@ export function useAuth(cameraRef: any, options?: UseAuthOptions) {
     if (isMountedRef.current) {
       setLogData(null);
       setError(null);
+      setPrompt(null);
     }
   };
 
@@ -73,6 +75,7 @@ export function useAuth(cameraRef: any, options?: UseAuthOptions) {
     if (isMountedRef.current) {
       setLogData(null);
       setError(null);
+      setPrompt(null);
     }
 
     try {
@@ -139,6 +142,10 @@ export function useAuth(cameraRef: any, options?: UseAuthOptions) {
         // Process landmarks in engine
         const engineRes = livenessEngine.processFrame(landmarks);
 
+        if (isMountedRef.current) {
+          setPrompt(engineRes.prompt);
+        }
+
         if (engineRes.state === 'PASSED') {
           success = true;
           break;
@@ -154,6 +161,7 @@ export function useAuth(cameraRef: any, options?: UseAuthOptions) {
           const livenessError: LivenessError = { code, message };
           if (isMountedRef.current) {
             setError(livenessError);
+            setPrompt(null);
           }
           setStatus('failed');
           if (options?.onLivenessFailed) {
@@ -179,6 +187,7 @@ export function useAuth(cameraRef: any, options?: UseAuthOptions) {
         };
         if (isMountedRef.current) {
           setError(enrollError);
+          setPrompt(null);
         }
         setStatus('failed');
         if (options?.onEnrollmentRequired) {
@@ -251,6 +260,7 @@ export function useAuth(cameraRef: any, options?: UseAuthOptions) {
         };
         if (isMountedRef.current) {
           setError(matchError);
+          setPrompt(null);
         }
         setStatus('failed');
         if (options?.onLivenessFailed) {
@@ -265,6 +275,7 @@ export function useAuth(cameraRef: any, options?: UseAuthOptions) {
       };
       if (isMountedRef.current) {
         setError(pipelineErr);
+        setPrompt(null);
       }
       setStatus('failed');
       if (options?.onLivenessFailed) {
@@ -277,6 +288,7 @@ export function useAuth(cameraRef: any, options?: UseAuthOptions) {
     status,
     logData,
     error,
+    prompt,
     startAuth,
     reset,
   };
