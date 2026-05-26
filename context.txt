@@ -10,20 +10,30 @@ Pipeline: Camera → MediaPipe Face Mesh (liveness) → CLAHE/Align → MobileFa
 
 ## 3. Interface Contracts (Stable)
 ### Types (src/types/index.ts)
-- AuthLog: { log_id, user_id, timestamp, gps_lat, gps_lng, device_id, similarity_score, photo_thumb }
-- FaceAuthenticatorProps: { onAuthSuccess, onLivenessFailed, onEnrollmentRequired, similarityThreshold? (0.6) }
+- AuthLog: { log_id: string, user_id: string, timestamp: string, gps_lat: number | null, gps_lng: number | null, device_id: string, similarity_score: number, photo_thumb: string }
 - LivenessErrorCode: 'TIMEOUT' | 'SPOOF_DETECTED' | 'NO_FACE_DETECTED'
+- LivenessError: { code: LivenessErrorCode, message: string }
+- FaceAuthenticatorProps: { onAuthSuccess: (log: AuthLog) => void, onLivenessFailed: (err: LivenessError) => void, onEnrollmentRequired: () => void, similarityThreshold?: number }
 
-### Config Defaults (src/constants/config.ts)
+### Config (src/constants/config.ts)
 - SIMILARITY_THRESHOLD = 0.6
+- THRESHOLD_RANGE = { permissive: 0.55, strict: 0.65 }
 - LIVENESS_TIMEOUT_MS = 10000
 - REQUIRED_CHALLENGES = 2
+- AWS_SYNC_URL = process.env.EXPO_PUBLIC_AWS_SYNC_URL
+- MODEL_PATHS = { mobilefacenet: 'assets/models/mobilefacenet_int8.tflite' }
+
+### Liveness (src/constants/liveness.ts)
+- Challenge: enum { BLINK, SMILE, HEAD_TURN }
+- EAR_LANDMARKS = { leftEye: [159, 145], rightEye: [386, 374] }
+- MAR_INDICES = [61, 291, 13, 14]
+- LIVENESS_THRESHOLDS = { EAR: 0.2, MAR: 0.6, headYaw: 0.15 }
 
 ## 4. Implementation Status
 | Phase | Status | Files |
 |-------|--------|-------|
 | 0. Scaffolding | DONE | package.json, app.json, eas.json, tsconfig.json, .env.example, full src/ tree |
-| 1. Types | NOT_STARTED | src/types/index.ts, constants/* |
+| 1. Types | DONE | src/types/index.ts, constants/* |
 | 2. Database | NOT_STARTED | sqlite.ts, secureStorage.ts, enrolledFaces.ts, authLogs.ts |
 | 3. Mock AWS | NOT_STARTED | mock-aws-server/server.js |
 | 4. Network/Sync | NOT_STARTED | connectionInfo.ts, awsSync.ts, useNetworkStatus.ts |
@@ -42,13 +52,14 @@ Pipeline: Camera → MediaPipe Face Mesh (liveness) → CLAHE/Align → MobileFa
 - Sync Purge Rule: NEVER delete local rows until HTTP 200 confirmed
 - Encryption: AES-256 via react-native-encrypted-storage
 - Phase 0 complete. Expo SDK 50 scaffold with all placeholder files. Strict TypeScript enabled.
+- Phase 1 complete. All types strict-checked. No runtime code yet.
 
 ## 6. Pending Risks
 - MediaPipe WASM may be slow on iOS 12 → upgrade to react-native-fast-tflite (Option B) post-MVP
 - INT8 model not yet bundled → using deterministic pseudo-embeddings for MVP
 
 ## 7. Next Step
-Phase 1: TypeScript Types & Constants.
+Phase 2: SQLite Database Layer.
 
 ## 8. Handoff Rules for Teammates
 - Read this file first before any new prompt.
