@@ -1,0 +1,57 @@
+# Binary Brains — Hackathon 7.0 Context
+## 1. Project Identity
+- Name: binary-brains-datalake
+- Stack: Expo SDK 50 + React Native 0.73 + TypeScript strict
+- Platforms: Android 8+, iOS 12+
+- Constraint: 100% open-source (Apache 2.0 / MIT / BSD)
+
+## 2. Architecture Snapshot
+Pipeline: Camera → MediaPipe Face Mesh (liveness) → CLAHE/Align → MobileFaceNet INT8 (512-d) → Cosine Match SQLite → Log → AWS Sync
+
+## 3. Interface Contracts (Stable)
+### Types (src/types/index.ts)
+- AuthLog: { log_id, user_id, timestamp, gps_lat, gps_lng, device_id, similarity_score, photo_thumb }
+- FaceAuthenticatorProps: { onAuthSuccess, onLivenessFailed, onEnrollmentRequired, similarityThreshold? (0.6) }
+- LivenessErrorCode: 'TIMEOUT' | 'SPOOF_DETECTED' | 'NO_FACE_DETECTED'
+
+### Config Defaults (src/constants/config.ts)
+- SIMILARITY_THRESHOLD = 0.6
+- LIVENESS_TIMEOUT_MS = 10000
+- REQUIRED_CHALLENGES = 2
+
+## 4. Implementation Status
+| Phase | Status | Files |
+|-------|--------|-------|
+| 0. Scaffolding | DONE | package.json, app.json, eas.json, tsconfig.json, .env.example, full src/ tree |
+| 1. Types | NOT_STARTED | src/types/index.ts, constants/* |
+| 2. Database | NOT_STARTED | sqlite.ts, secureStorage.ts, enrolledFaces.ts, authLogs.ts |
+| 3. Mock AWS | NOT_STARTED | mock-aws-server/server.js |
+| 4. Network/Sync | NOT_STARTED | connectionInfo.ts, awsSync.ts, useNetworkStatus.ts |
+| 5. Preprocessing | NOT_STARTED | imagePreProc.ts, math.ts |
+| 6. Liveness | NOT_STARTED | liveness.ts |
+| 7. Recognition | NOT_STARTED | recognition.ts |
+| 8. Camera/Hook | NOT_STARTED | frameProcessors.ts, useAuth.ts |
+| 9. UI Overlay | NOT_STARTED | CameraOverlay.tsx, LivenessFeedback.tsx, FaceAuthenticator.tsx |
+| 10. Enrollment Screen | NOT_STARTED | EnrollmentScreen.tsx |
+| 11. Demo Screen | NOT_STARTED | DemoAuthScreen.tsx, App.tsx |
+| 12. Polish | NOT_STARTED | README, ARCHITECTURE.md |
+
+## 5. Key Decisions Log
+- MVP Integration: Option A (expo-camera + deterministic embeddings until .tflite bundled)
+- Database: expo-sqlite (upgrade to op-sqlite for production)
+- Sync Purge Rule: NEVER delete local rows until HTTP 200 confirmed
+- Encryption: AES-256 via react-native-encrypted-storage
+- Phase 0 complete. Expo SDK 50 scaffold with all placeholder files. Strict TypeScript enabled.
+
+## 6. Pending Risks
+- MediaPipe WASM may be slow on iOS 12 → upgrade to react-native-fast-tflite (Option B) post-MVP
+- INT8 model not yet bundled → using deterministic pseudo-embeddings for MVP
+
+## 7. Next Step
+Phase 1: TypeScript Types & Constants.
+
+## 8. Handoff Rules for Teammates
+- Read this file first before any new prompt.
+- Reference Interface Contracts (Section 3) to know what exists without reading the full codebase.
+- After every task, update Section 4 (Status) and Section 5 (Decisions).
+- Keep entries concise; this file must stay under 1500 tokens.

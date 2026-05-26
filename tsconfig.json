@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "jsx": "react-native",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "allowSyntheticDefaultImports": true,
+    "target": "esnext",
+    "module": "commonjs",
+    "lib": ["esnext"],
+    "allowJs": true,
+    "resolveJsonModule": true
+  },
+  "include": [
+    "src/**/*",
+    "App.tsx"
+  ]
+}

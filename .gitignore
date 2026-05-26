@@ -1,0 +1,54 @@
+# Dependencies
+node_modules/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# Expo
+.expo/
+.expo-shared/
+
+# Metro bundler
+.metro-health-check*
+
+# Build outputs
+android/app/build/
+android/build/
+android/.gradle/
+android/app/.cxx/
+ios/build/
+ios/Pods/
+
+# Native directories (if using prebuild / CNG)
+android/
+ios/
+!android/app/src/
+!ios/MyApp/
+
+# Xcode
+*.xcworkspace
+*.xcuserdata
+*.xcodeproj.local
+
+# macOS
+.DS_Store
+
+# Editors
+.vscode/
+.idea/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Jest
+coverage/
+
+# Misc
+*.swp
+*.swo
+*~

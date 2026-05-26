@@ -1,0 +1,34 @@
+{
+  "expo": {
+    "name": "binary-brains-datalake",
+    "slug": "binary-brains-datalake",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.binarybrains.datalake",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Allow binary-brains-datalake to access camera.",
+        "NSLocationWhenInUseUsageDescription": "Allow binary-brains-datalake to access location."
+      }
+    },
+    "android": {
+      "package": "com.binarybrains.datalake",
+      "permissions": [
+        "CAMERA",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
+    },
+    "plugins": [
+      "expo-camera",
+      "expo-location"
+    ]
+  }
+}
