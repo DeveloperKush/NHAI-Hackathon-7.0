@@ -8,12 +8,15 @@
     "allowSyntheticDefaultImports": true,
     "target": "esnext",
     "module": "commonjs",
-    "lib": ["esnext"],
+    "lib": [
+      "esnext"
+    ],
     "allowJs": true,
     "resolveJsonModule": true
   },
   "include": [
     "src/**/*",
     "App.tsx"
-  ]
+  ],
+  "extends": "expo/tsconfig.base"
 }
