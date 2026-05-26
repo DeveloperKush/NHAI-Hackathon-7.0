@@ -60,6 +60,13 @@ Pure utilities with zero external dependencies to ensure fast execution and cons
 - **Vector Cosine Similarity**: Compares Float32Array face embeddings to evaluate matching authenticity scores.
 - **Vector L2 Normalization**: Scales face embeddings to unit L2 length.
 
+### 7. Camera Processing & Authentication Hook
+Integrated camera frame capture preprocessing, mock mesh coordinates generation, and auth orchestration hook under `src/services/camera/` and `src/hooks/`:
+- **Camera Frame Processor (`processCameraFrame`)**: Decodes frame base64 data, resizes to a standardized `112x112` canvas using bilinear interpolation, runs CLAHE to equalize contrast, and returns normalized float values.
+- **Landmarks Simulation (`simulateLandmarksFromFrame`)**: Simulates 468 landmarks for MediaPipe Face Mesh. Correctly sets 3D depth variance for authentic faces to pass the passive 3D depth check, and flattens depth (`z ≈ 0`) to trigger spoof detection for flat photo spoofs. Includes eye-blink, smile, and head-turn gesture simulation.
+- **Sequential Enrollment Captures (`captureEnrollmentFrames`)**: Captures 3-5 sequential photos programmatically via the camera ref for administrative face enrollment.
+- **Auth Orchestration Hook (`useAuth`)**: A state machine hook that guides the authentication flow through exact states: `idle` ➔ `scanning` ➔ `liveness` ➔ `matching` ➔ `authenticated` / `failed`. Handles the liveness challenge loops, coordinates location (GPS) captures, executes SQLite logs creation, and triggers network dispatches.
+
 ---
 
 ## Database Schemas
@@ -143,8 +150,8 @@ Expected response:
 | 5. Preprocessing | ✅ DONE | imagePreProc.ts, math.ts |
 | 6. Liveness | ✅ DONE | MediaPipe Face Mesh EAR/MAR challenge detection |
 | 7. Recognition | ✅ DONE | MobileFaceNet INT8 cosine similarity matching |
-| 8. Camera/Hook | 🔲 Next | frameProcessors.ts, useAuth.ts |
-| 9. UI Overlay | 🔲 Pending | CameraOverlay, LivenessFeedback, FaceAuthenticator |
+| 8. Camera/Hook | ✅ DONE | frameProcessors.ts, useAuth.ts |
+| 9. UI Overlay | 🔲 Next | CameraOverlay, LivenessFeedback, FaceAuthenticator |
 | 10. Enrollment | 🔲 Pending | EnrollmentScreen.tsx |
 | 11. Demo | 🔲 Pending | DemoAuthScreen.tsx, App.tsx |
 | 12. Polish | 🔲 Pending | ARCHITECTURE.md |

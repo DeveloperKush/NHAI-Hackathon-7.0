@@ -81,6 +81,16 @@ Pipeline: Camera → MediaPipe Face Mesh (liveness) → CLAHE/Align → MobileFa
 - findBestMatch(embedding: Float32Array, enrolledFaces: {user_id: string, embedding: Float32Array}[]): {user_id: string | null, score: number}
 - generateDeviceId(): string
 
+### Camera Integration & Processing (src/services/camera/frameProcessors.ts)
+- processCameraFrame(frame: CameraCapturedPicture): Promise<Float32Array> — resize, CLAHE, normalize
+- simulateLandmarksFromFrame(frame: any, isRealFace: boolean): Landmark[] — generates 468 landmarks (real z-variance or flat spoof)
+- captureEnrollmentFrames(cameraRef: any, count?: number): Promise<string[]> — captures snapshots sequentially, returns base64 JPEG array
+
+### Auth Orchestration Hook (src/hooks/useAuth.ts)
+- useAuth(cameraRef, options) returns { status, logData, error, startAuth, reset }
+- status flow: idle -> scanning -> liveness -> matching -> authenticated/failed
+
+
 ### Mock Server Contract (mock-aws-server/server.js)
 - Endpoint: POST /api/sync
 - Request: { logs: AuthLog[] }
@@ -99,7 +109,7 @@ Pipeline: Camera → MediaPipe Face Mesh (liveness) → CLAHE/Align → MobileFa
 | 5. Preprocessing | DONE | imagePreProc.ts, math.ts |
 | 6. Liveness | DONE | liveness.ts |
 | 7. Recognition | DONE | recognition.ts |
-| 8. Camera/Hook | NOT_STARTED | frameProcessors.ts, useAuth.ts |
+| 8. Camera/Hook | DONE | frameProcessors.ts, useAuth.ts |
 | 9. UI Overlay | NOT_STARTED | CameraOverlay.tsx, LivenessFeedback.tsx, FaceAuthenticator.tsx |
 | 10. Enrollment Screen | NOT_STARTED | EnrollmentScreen.tsx |
 | 11. Demo Screen | NOT_STARTED | DemoAuthScreen.tsx, App.tsx |
@@ -118,13 +128,14 @@ Pipeline: Camera → MediaPipe Face Mesh (liveness) → CLAHE/Align → MobileFa
 - Phase 5 complete. Pure utilities. CLAHE + global hist eq for Indian outdoor lighting.
 - Phase 6 complete. 4-factor liveness: EAR blink, MAR smile, head yaw, 3D depth. Random challenge order.
 - Phase 7 complete. MVP uses deterministic pseudo-embeddings. Upgrade path documented.
+- Phase 8 complete. MVP uses expo-camera snapshot mode. Simulated landmarks for MVP.
 
 ## 6. Pending Risks
 - MediaPipe WASM may be slow on iOS 12 → upgrade to react-native-fast-tflite (Option B) post-MVP
 - INT8 model not yet bundled → using deterministic pseudo-embeddings for MVP
 
 ## 7. Next Step
-Phase 8: Camera Frame Processor & Auth Hook.
+Phase 9: UI Components.
 
 ## 8. Handoff Rules for Teammates
 - Read this file first before any new prompt.
