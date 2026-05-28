@@ -33,9 +33,10 @@ function base64ToFloat32Array(base64Str: string): Float32Array {
  * The face embedding is encrypted as an AES-256 base64 ciphertext string before insertion.
  */
 export async function insertEnrolledFace(user_id: string, embedding: Float32Array): Promise<void> {
+  console.log('Inserting enrolled face:', user_id, embedding.length);
   // Ensure the encryption key is loaded
   await getOrCreateEncryptionKey();
-
+  
   // Convert Float32Array to base64, then encrypt it
   const base64Str = float32ArrayToBase64(embedding);
   const encryptedEmbedding = encryptData(base64Str);
@@ -68,6 +69,7 @@ export async function getAllEnrolledFaces(): Promise<{ user_id: string; embeddin
     }
   }
 
+  console.log('Retrieved enrolled faces:', faces.length);
   return faces;
 }
 

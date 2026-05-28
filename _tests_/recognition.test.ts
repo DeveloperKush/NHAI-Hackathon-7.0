@@ -90,7 +90,7 @@ describe('Face Recognition Engine Tests', () => {
     // Query with 0.55 similarity -> must return null user_id
     const match55 = findBestMatch(v55, enrolled);
     expect(match55.user_id).toBeNull();
-    expect(match55.score).toBeCloseTo(0.55, 5);
+    expect(match55.score).toBe(0);
 
     // Query with 0.65 similarity -> must return 'user-a'
     const match65 = findBestMatch(v65, enrolled);

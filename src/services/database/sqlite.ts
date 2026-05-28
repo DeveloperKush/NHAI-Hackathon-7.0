@@ -41,11 +41,10 @@ export function executeSql(sql: string, params: any[] = []): Promise<SQLResult> 
 /**
  * Initialize all required SQLite tables.
  */
-export function initDatabase(): Promise<void> {
+export function initializeDatabase(): Promise<void> {
   return new Promise((resolve, reject) => {
     db.transaction(
       (tx) => {
-        // 1. enrolled_faces table
         tx.executeSql(
           `CREATE TABLE IF NOT EXISTS enrolled_faces (
             user_id TEXT PRIMARY KEY,
@@ -60,7 +59,6 @@ export function initDatabase(): Promise<void> {
           }
         );
 
-        // 2. auth_logs table
         tx.executeSql(
           `CREATE TABLE IF NOT EXISTS auth_logs (
             log_id TEXT PRIMARY KEY,
@@ -84,8 +82,23 @@ export function initDatabase(): Promise<void> {
         );
       },
       (txError) => {
+        console.error('Database initialization transaction failed:', txError);
         reject(txError);
+      },
+      () => {
+        console.log('Database initialized successfully.');
+        resolve();
       }
     );
   });
 }
+
+// Keep initDatabase for backwards compatibility with tests
+export function initDatabase(): Promise<void> {
+  return initializeDatabase();
+}
+
+// Execute schema creation immediately on module load
+initializeDatabase().catch((err) => {
+  console.error('Failed to initialize database schema immediately on module load:', err);
+});

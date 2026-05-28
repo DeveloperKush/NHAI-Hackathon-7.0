@@ -8,11 +8,17 @@ import { applyCLAHE, normalizePixels } from '../../utils/imagePreProc';
  * applies Contrast Limited Adaptive Histogram Equalization (CLAHE), and normalizes pixels to [-1.0, 1.0].
  */
 export async function processCameraFrame(frame: CameraCapturedPicture): Promise<Float32Array> {
-  const { width, height, base64: base64Str } = frame;
+  let { width, height } = frame;
+  const { base64: base64Str } = frame;
 
   let pixels: Uint8Array;
   if (base64Str) {
-    const decoded = base64.decode(base64Str);
+    let cleanBase64 = base64Str;
+    if (cleanBase64.includes(',')) {
+      cleanBase64 = cleanBase64.split(',')[1];
+    }
+    cleanBase64 = cleanBase64.replace(/[^A-Za-z0-9+/=]/g, '');
+    const decoded = base64.decode(cleanBase64);
     const bytes = new Uint8Array(decoded.length);
     for (let i = 0; i < decoded.length; i++) {
       bytes[i] = decoded.charCodeAt(i);
@@ -21,7 +27,10 @@ export async function processCameraFrame(frame: CameraCapturedPicture): Promise<
     if (bytes.length === width * height) {
       pixels = bytes;
     } else {
-      // If base64 length is different (e.g. compressed JPEG), fallback to mapping bytes to width * height
+      // If base64 length is different (e.g. compressed JPEG), use a fixed resolution
+      // for the byte-to-pixel mapping grid to ensure identical features.
+      width = 640;
+      height = 480;
       pixels = new Uint8Array(width * height);
       for (let i = 0; i < pixels.length; i++) {
         pixels[i] = bytes[i % bytes.length] || 128;

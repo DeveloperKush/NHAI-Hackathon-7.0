@@ -139,8 +139,8 @@ function useAuth(cameraRef, options) {
                 let frame;
                 try {
                     if (cameraRef && cameraRef.current && typeof cameraRef.current.takePictureAsync === 'function') {
-                        frame = await cameraRef.current.takePictureAsync({ base64: true, quality: 0.5 });
-                        Object.assign(frame, mockFrameProps);
+                        const rawFrame = await cameraRef.current.takePictureAsync({ base64: true, quality: 0.5 });
+                        frame = { ...rawFrame, ...mockFrameProps };
                     }
                     else {
                         frame = { uri: 'mock_uri', width: 640, height: 480, base64: 'mock_base_64_data', ...mockFrameProps };

@@ -38,6 +38,7 @@ function base64ToFloat32Array(base64Str) {
  * The face embedding is encrypted as an AES-256 base64 ciphertext string before insertion.
  */
 async function insertEnrolledFace(user_id, embedding) {
+    console.log('Inserting enrolled face:', user_id, embedding.length);
     // Ensure the encryption key is loaded
     await (0, secureStorage_1.getOrCreateEncryptionKey)();
     // Convert Float32Array to base64, then encrypt it
@@ -65,6 +66,7 @@ async function getAllEnrolledFaces() {
             console.error(`Failed to decrypt embedding for user ${row.user_id}:`, err);
         }
     }
+    console.log('Retrieved enrolled faces:', faces.length);
     return faces;
 }
 /**

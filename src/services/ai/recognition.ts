@@ -88,22 +88,24 @@ export function findBestMatch(
     return { user_id: null, score: 0 };
   }
 
-  let bestScore = -1;
+  let maxScore = -1;
   let bestUserId: string | null = null;
+  const threshold = SIMILARITY_THRESHOLD;
 
   for (const face of enrolledFaces) {
     const score = cosineSimilarity(embedding, face.embedding);
-    if (score > bestScore) {
-      bestScore = score;
+    console.log(`Checking match for user_id: ${face.user_id}, score: ${score}, current max: ${maxScore}`);
+    if (score > maxScore) {
+      maxScore = score;
       bestUserId = face.user_id;
     }
   }
 
-  if (bestScore > SIMILARITY_THRESHOLD) {
-    return { user_id: bestUserId, score: bestScore };
+  if (maxScore > threshold) {
+    return { user_id: bestUserId, score: maxScore };
   }
 
-  return { user_id: null, score: bestScore };
+  return { user_id: null, score: 0 };
 }
 
 // Memory cache for stable device ID fallback when Constants.installationId is unavailable

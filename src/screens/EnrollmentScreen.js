@@ -55,6 +55,18 @@ function EnrollmentScreen({ navigation }) {
     const [currentStep, setCurrentStep] = (0, react_1.useState)(1);
     const [errorMsg, setErrorMsg] = (0, react_1.useState)(null);
     const [successMsg, setSuccessMsg] = (0, react_1.useState)(null);
+    const [hasPermission, setHasPermission] = (0, react_1.useState)(null);
+    (0, react_1.useEffect)(() => {
+        (async () => {
+            if (expo_camera_1.Camera.requestCameraPermissionsAsync) {
+                const { status } = await expo_camera_1.Camera.requestCameraPermissionsAsync();
+                setHasPermission(status === 'granted');
+            }
+            else {
+                setHasPermission(true);
+            }
+        })();
+    }, []);
     const handleCapture = async () => {
         setErrorMsg(null);
         setSuccessMsg(null);
@@ -171,11 +183,18 @@ function EnrollmentScreen({ navigation }) {
 
         {/* Camera Preview */}
         <react_native_1.View style={styles.cameraContainer}>
-          <expo_camera_1.Camera ref={cameraRef} style={styles.camera} type={expo_camera_1.CameraType.front}/>
-          {isCapturing && (<react_native_1.View style={styles.loadingOverlay}>
+          {hasPermission === null ? (<react_native_1.View style={styles.loadingOverlay}>
               <react_native_1.ActivityIndicator size="large" color="#ffffff"/>
-              <react_native_1.Text style={styles.loadingText}>Capturing 5 Frames…</react_native_1.Text>
-            </react_native_1.View>)}
+              <react_native_1.Text style={styles.loadingText}>Initializing camera...</react_native_1.Text>
+            </react_native_1.View>) : hasPermission === false ? (<react_native_1.View style={styles.loadingOverlay}>
+              <react_native_1.Text style={styles.loadingText}>Camera permission denied</react_native_1.Text>
+            </react_native_1.View>) : (<>
+              <expo_camera_1.Camera ref={cameraRef} style={styles.camera} type={expo_camera_1.CameraType.front}/>
+              {isCapturing && (<react_native_1.View style={styles.loadingOverlay}>
+                  <react_native_1.ActivityIndicator size="large" color="#ffffff"/>
+                  <react_native_1.Text style={styles.loadingText}>Capturing 5 Frames…</react_native_1.Text>
+                </react_native_1.View>)}
+            </>)}
         </react_native_1.View>
 
         {/* Capture Button */}

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -39,6 +39,18 @@ export default function EnrollmentScreen({ navigation }: EnrollmentScreenProps) 
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      if (Camera.requestCameraPermissionsAsync) {
+        const { status } = await Camera.requestCameraPermissionsAsync();
+        setHasPermission(status === 'granted');
+      } else {
+        setHasPermission(true);
+      }
+    })();
+  }, []);
 
   const handleCapture = async () => {
     setErrorMsg(null);
@@ -166,16 +178,29 @@ export default function EnrollmentScreen({ navigation }: EnrollmentScreenProps) 
 
         {/* Camera Preview */}
         <View style={styles.cameraContainer}>
-          <Camera
-            ref={cameraRef}
-            style={styles.camera}
-            type={CameraType.front}
-          />
-          {isCapturing && (
+          {hasPermission === null ? (
             <View style={styles.loadingOverlay}>
               <ActivityIndicator size="large" color="#ffffff" />
-              <Text style={styles.loadingText}>Capturing 5 Frames…</Text>
+              <Text style={styles.loadingText}>Initializing camera...</Text>
             </View>
+          ) : hasPermission === false ? (
+            <View style={styles.loadingOverlay}>
+              <Text style={styles.loadingText}>Camera permission denied</Text>
+            </View>
+          ) : (
+            <>
+              <Camera
+                ref={cameraRef}
+                style={styles.camera}
+                type={CameraType.front}
+              />
+              {isCapturing && (
+                <View style={styles.loadingOverlay}>
+                  <ActivityIndicator size="large" color="#ffffff" />
+                  <Text style={styles.loadingText}>Capturing 5 Frames…</Text>
+                </View>
+              )}
+            </>
           )}
         </View>
 

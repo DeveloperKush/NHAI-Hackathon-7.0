@@ -35,6 +35,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.db = void 0;
 exports.executeSql = executeSql;
+exports.initializeDatabase = initializeDatabase;
 exports.initDatabase = initDatabase;
 const SQLite = __importStar(require("expo-sqlite"));
 exports.db = SQLite.openDatabase('binary_brains.db');
@@ -58,10 +59,9 @@ function executeSql(sql, params = []) {
 /**
  * Initialize all required SQLite tables.
  */
-function initDatabase() {
+function initializeDatabase() {
     return new Promise((resolve, reject) => {
         exports.db.transaction((tx) => {
-            // 1. enrolled_faces table
             tx.executeSql(`CREATE TABLE IF NOT EXISTS enrolled_faces (
             user_id TEXT PRIMARY KEY,
             embedding BLOB,
@@ -70,7 +70,6 @@ function initDatabase() {
                 reject(err);
                 return true;
             });
-            // 2. auth_logs table
             tx.executeSql(`CREATE TABLE IF NOT EXISTS auth_logs (
             log_id TEXT PRIMARY KEY,
             user_id TEXT,
@@ -88,7 +87,19 @@ function initDatabase() {
                 return true;
             });
         }, (txError) => {
+            console.error('Database initialization transaction failed:', txError);
             reject(txError);
+        }, () => {
+            console.log('Database initialized successfully.');
+            resolve();
         });
     });
 }
+// Keep initDatabase for backwards compatibility with tests
+function initDatabase() {
+    return initializeDatabase();
+}
+// Execute schema creation immediately on module load
+initializeDatabase().catch((err) => {
+    console.error('Failed to initialize database schema immediately on module load:', err);
+});

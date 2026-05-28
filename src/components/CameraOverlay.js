@@ -40,6 +40,18 @@ const expo_camera_1 = require("expo-camera");
 const { width: screenWidth, height: screenHeight } = react_native_1.Dimensions.get('window');
 function CameraOverlay({ cameraRef, status, children }) {
     const pulseAnim = (0, react_1.useRef)(new react_native_1.Animated.Value(1)).current;
+    const [hasPermission, setHasPermission] = (0, react_1.useState)(null);
+    (0, react_1.useEffect)(() => {
+        (async () => {
+            if (expo_camera_1.Camera.requestCameraPermissionsAsync) {
+                const { status: permStatus } = await expo_camera_1.Camera.requestCameraPermissionsAsync();
+                setHasPermission(permStatus === 'granted');
+            }
+            else {
+                setHasPermission(true);
+            }
+        })();
+    }, []);
     // Determine border color based on status
     let borderColor = '#1a237e'; // default navy
     if (status === 'authenticated') {
@@ -76,20 +88,35 @@ function CameraOverlay({ cameraRef, status, children }) {
         };
     }, [status]);
     // Calculate cutout layout
-    const cutoutWidth = screenWidth * 0.75;
-    const cutoutHeight = cutoutWidth * (4 / 3); // 3:4 aspect ratio
-    const topOffset = (screenHeight - cutoutHeight) / 2;
-    const leftOffset = (screenWidth - cutoutWidth) / 2;
-    return (<react_native_1.View style={styles.container}>
-      <expo_camera_1.Camera ref={cameraRef} style={react_native_1.StyleSheet.absoluteFillObject} type={expo_camera_1.CameraType.front}/>
+    const [layout, setLayout] = (0, react_1.useState)(null);
+    const onLayout = (event) => {
+        const { width, height } = event.nativeEvent.layout;
+        setLayout({ width, height });
+    };
+    const containerWidth = layout ? layout.width : screenWidth;
+    const containerHeight = layout ? layout.height : 350;
+    let cutoutWidth = containerWidth * 0.65;
+    let cutoutHeight = cutoutWidth * (4 / 3);
+    if (cutoutHeight > containerHeight * 0.7) {
+        cutoutHeight = containerHeight * 0.7;
+        cutoutWidth = cutoutHeight * (3 / 4);
+    }
+    const topOffset = (containerHeight - cutoutHeight) / 2;
+    const leftOffset = (containerWidth - cutoutWidth) / 2;
+    return (<react_native_1.View style={styles.container} onLayout={onLayout}>
+      {hasPermission === null ? (<react_native_1.View style={[react_native_1.StyleSheet.absoluteFillObject, { backgroundColor: '#000000', alignItems: 'center', justifyContent: 'center' }]}>
+          <react_native_1.ActivityIndicator size="large" color="#ffffff"/>
+        </react_native_1.View>) : hasPermission === false ? (<react_native_1.View style={[react_native_1.StyleSheet.absoluteFillObject, { backgroundColor: '#000000', alignItems: 'center', justifyContent: 'center', padding: 20 }]}>
+          <react_native_1.Text style={{ color: '#ffffff', fontWeight: 'bold', textAlign: 'center' }}>Camera permission is required</react_native_1.Text>
+        </react_native_1.View>) : (<expo_camera_1.Camera ref={cameraRef} style={react_native_1.StyleSheet.absoluteFillObject} type={expo_camera_1.CameraType.front}/>)}
 
       {/* Semi-transparent Overlay with Cutout */}
       <react_native_1.View style={react_native_1.StyleSheet.absoluteFillObject} pointerEvents="box-none">
         {/* Top block */}
-        <react_native_1.View style={[styles.overlayBlock, { height: topOffset, width: screenWidth }]}/>
+        <react_native_1.View style={[styles.overlayBlock, { height: topOffset, width: containerWidth }]}/>
 
         {/* Middle row */}
-        <react_native_1.View style={{ height: cutoutHeight, flexDirection: 'row', width: screenWidth }}>
+        <react_native_1.View style={{ height: cutoutHeight, flexDirection: 'row', width: containerWidth }}>
           {/* Left block */}
           <react_native_1.View style={[styles.overlayBlock, { width: leftOffset, height: cutoutHeight }]}/>
 
@@ -110,7 +137,7 @@ function CameraOverlay({ cameraRef, status, children }) {
         </react_native_1.View>
 
         {/* Bottom block */}
-        <react_native_1.View style={[styles.overlayBlock, { flex: 1, width: screenWidth }]}/>
+        <react_native_1.View style={[styles.overlayBlock, { flex: 1, width: containerWidth }]}/>
       </react_native_1.View>
 
       {/* Children inside safe area */}
