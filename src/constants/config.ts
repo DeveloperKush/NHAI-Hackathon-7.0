@@ -12,5 +12,5 @@ export const REQUIRED_CHALLENGES = 2;
 export const AWS_SYNC_URL = process.env.EXPO_PUBLIC_AWS_SYNC_URL;
 
 export const MODEL_PATHS = {
-  mobilefacenet: 'assets/models/mobilefacenet_int8.tflite',
+  mobilefacenet: 'assets/models/ghostfacenet_fixed_int8.tflite',
 };

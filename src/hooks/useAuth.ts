@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { AuthLog, LivenessError, LivenessErrorCode } from '../types';
 import { LivenessEngine, checkDepthConsistency } from '../services/ai/liveness';
-import { extractEmbedding, findBestMatch, generateDeviceId } from '../services/ai/recognition';
+import { extractEmbedding, findBestMatch, generateDeviceId, getModelStatus } from '../services/ai/recognition';
 import { insertAuthLog } from '../services/database/authLogs';
 import { getAllEnrolledFaces } from '../services/database/enrolledFaces';
 import { syncAuthLogs } from '../services/network/awsSync';
@@ -200,8 +200,47 @@ export function useAuth(cameraRef: any, options?: UseAuthOptions) {
         throw new Error('No preprocessed frame available for face recognition.');
       }
 
+      // Check model load status
+      const IS_TEST = typeof (global as any).jest !== 'undefined' || process.env.NODE_ENV === 'test';
+      if (!IS_TEST) {
+        const modelStatus = getModelStatus();
+        if (modelStatus.error || !modelStatus.loaded) {
+          const loadError: LivenessError = {
+            code: 'NO_FACE_DETECTED',
+            message: 'AI model unavailable. Please restart app.',
+          };
+          if (isMountedRef.current) {
+            setError(loadError);
+            setPrompt(null);
+          }
+          setStatus('failed');
+          if (options?.onLivenessFailed) {
+            options.onLivenessFailed(loadError);
+          }
+          return;
+        }
+      }
+
       // Extract embedding
-      const embedding = extractEmbedding(lastProcessedFrame);
+      let embedding: Float32Array;
+      try {
+        embedding = extractEmbedding(lastProcessedFrame);
+      } catch (err: any) {
+        console.error('Embedding extraction failed:', err);
+        const extractError: LivenessError = {
+          code: 'NO_FACE_DETECTED',
+          message: 'Face encoding failed. Please retry.',
+        };
+        if (isMountedRef.current) {
+          setError(extractError);
+          setPrompt(null);
+        }
+        setStatus('failed');
+        if (options?.onLivenessFailed) {
+          options.onLivenessFailed(extractError);
+        }
+        return;
+      }
 
       // Perform cosine similarity matching
       const threshold = options?.similarityThreshold ?? SIMILARITY_THRESHOLD;

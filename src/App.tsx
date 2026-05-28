@@ -8,29 +8,31 @@ import { useNetworkStatus } from './hooks/useNetworkStatus';
 import DemoAuthScreen from './screens/DemoAuthScreen';
 import EnrollmentScreen from './screens/EnrollmentScreen';
 import { initializeDatabase } from './services/database/sqlite';
+import { initRecognitionModel } from './services/ai/recognition';
 
 const Stack = createStackNavigator();
 
 export default function App() {
-  const [isDbReady, setIsDbReady] = useState(false);
+  const [isReady, setIsReady] = useState(false);
 
   // Activate global connection monitoring and auto-sync on network reconnection
   useNetworkStatus();
 
   useEffect(() => {
-    async function setupDb() {
+    async function setupApp() {
       try {
         await initializeDatabase();
-        setIsDbReady(true);
+        await initRecognitionModel();
       } catch (err) {
-        console.error('Failed to initialize database:', err);
-        setIsDbReady(true);
+        console.error('Failed to initialize application components:', err);
+      } finally {
+        setIsReady(true);
       }
     }
-    setupDb();
+    setupApp();
   }, []);
 
-  if (!isDbReady) {
+  if (!isReady) {
     return (
       <SafeAreaProvider>
         <View style={{ flex: 1, backgroundColor: '#ffffff', alignItems: 'center', justifyContent: 'center' }}>

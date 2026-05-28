@@ -1,20 +1,22 @@
 # Binary Brains — NHAI Hackathon 7.0
 
-A high-performance offline-first facial authentication liveness detection and logging solution designed for NHAI (National Highways Authority of India) applications. Built with Expo, MediaPipe, and MobileFaceNet.
+A high-performance offline-first facial authentication liveness detection and logging solution designed for NHAI (National Highways Authority of India) applications. Built with Expo, MediaPipe, and GhostFaceNet.
 
 ## Technical Stack
 - **Core Framework**: Expo SDK 50 + React Native 0.73
 - **Language**: TypeScript (Strict Mode)
 - **Local Storage**: `expo-sqlite` (Relational structured database)
 - **Security & Encryption**: `react-native-encrypted-storage` + AES-256 encryption (`crypto-js`)
-- **Neural Network Models**: MobileFaceNet INT8 (512-dimensional face embeddings)
+- **Neural Network Engine**: `react-native-fast-tflite` (JSI/C++ native runtime)
+- **Neural Network Models**: GhostFaceNet INT8 (512-dimensional face embeddings)
+- **Image Decoding**: `jpeg-js` (pure Javascript JPEG decoder)
 - **Dev Mock Server**: Express 4 (`mock-aws-server/`)
 
 ---
 
 ## Architecture Pipeline
 ```
-Camera Feed ➔ MediaPipe Face Mesh (Liveness Checks) ➔ Face Alignment (CLAHE) ➔ MobileFaceNet Embedding ➔ Cosine Similarity Matching (SQLite) ➔ Encrypted Local Logging ➔ AWS Sync (Background Worker)
+Camera Feed ➔ MediaPipe Face Mesh (Liveness Checks) ➔ JPEG Decode (jpeg-js) ➔ Face Alignment (CLAHE) ➔ GhostFaceNet INT8 Embedding ➔ Cosine Similarity Matching (SQLite) ➔ Encrypted Local Logging ➔ AWS Sync (Background Worker)
 ```
 
 ---
@@ -62,7 +64,7 @@ Pure utilities with zero external dependencies to ensure fast execution and cons
 
 ### 7. Camera Processing & Authentication Hook
 Integrated camera frame capture preprocessing, mock mesh coordinates generation, and auth orchestration hook under `src/services/camera/` and `src/hooks/`:
-- **Camera Frame Processor (`processCameraFrame`)**: Decodes frame base64 data, resizes to a standardized `112x112` canvas using bilinear interpolation, runs CLAHE to equalize contrast, and returns normalized float values.
+- **Camera Frame Processor (`processCameraFrame`)**: Decodes frame base64 JPEG data using `jpeg-js` into raw pixels, converts RGBA to grayscale, resizes to a standardized `112x112` canvas using bilinear interpolation, runs CLAHE to equalize contrast, and returns normalized float values.
 - **Landmarks Simulation (`simulateLandmarksFromFrame`)**: Simulates 468 landmarks for MediaPipe Face Mesh. Correctly sets 3D depth variance for authentic faces to pass the passive 3D depth check, and flattens depth (`z ≈ 0`) to trigger spoof detection for flat photo spoofs. Includes eye-blink, smile, and head-turn gesture simulation.
 - **Sequential Enrollment Captures (`captureEnrollmentFrames`)**: Captures 3-5 sequential photos programmatically via the camera ref for administrative face enrollment.
 - **Auth Orchestration Hook (`useAuth`)**: A state machine hook that guides the authentication flow through exact states: `idle` ➔ `scanning` ➔ `liveness` ➔ `matching` ➔ `authenticated` / `failed`. Handles the liveness challenge loops, coordinates location (GPS) captures, executes SQLite logs creation, and triggers network dispatches.
@@ -149,12 +151,12 @@ Expected response:
 | 4. Network/Sync | ✅ DONE | connectionInfo.ts, awsSync.ts, useNetworkStatus.ts |
 | 5. Preprocessing | ✅ DONE | imagePreProc.ts, math.ts |
 | 6. Liveness | ✅ DONE | MediaPipe Face Mesh EAR/MAR challenge detection |
-| 7. Recognition | ✅ DONE | MobileFaceNet INT8 cosine similarity matching |
+| 7. Recognition | ✅ DONE | TFLite GhostFaceNet INT8 cosine similarity matching |
 | 8. Camera/Hook | ✅ DONE | frameProcessors.ts, useAuth.ts |
 | 9. UI Overlay | ✅ DONE | CameraOverlay, LivenessFeedback, FaceAuthenticator |
 | 10. Enrollment | ✅ DONE | EnrollmentScreen.tsx |
 | 11. Demo | ✅ DONE | DemoAuthScreen.tsx, App.tsx |
-| 12. Polish | 🔲 Next | ARCHITECTURE.md |
+| 12. Polish | ✅ DONE | tsconfig emit configuration, README.md, context.txt |
 
 ---
 
@@ -166,7 +168,9 @@ Expected response:
 - **Zero-Loss Purge**: deleteSyncedLogs is ONLY invoked after HTTP 200 with received_logs array is confirmed
 - **Pure Preprocessing**: No side effects, no React Native/Native UI context dependencies, ensuring high-speed math checks and simple testability
 - **Liveness Validation**: 4-factor validation (EAR blink, MAR smile, head yaw asymmetry, and passive 3D depth check) with randomized challenge order, running on-device for spoof resistance.
-- **Face Recognition MVP**: Uses a deterministic region-intensity mean and gradient feature pseudo-embedding of 512 dimensions, with clear upgrade path documented to react-native-fast-tflite and MobileFaceNet INT8.
+- **TFLite Face Recognition Upgrade**: Fully upgraded from MVP pseudo-embeddings to GhostFaceNet INT8 real model running synchronously via `react-native-fast-tflite` JSI on-device. Input and output tensors quantized and dequantized natively with zero fallbacks.
+- **Real JPEG Frame Decoding**: Integrated `jpeg-js` library to decode compressed JPEG base64 photos into raw grayscale buffers, resolving key collision issues (where static JPEG headers resulted in high similarity score matches for different people).
+- **TypeScript Emit Prevention**: Configured `"noEmit": true` in `tsconfig.json` and deleted all duplicate compiled JS files inside `src/` to ensure Metro correctly resolves extensionless imports to the updated TS code.
 - **UI & Feedback Overlay**: Implemented CameraOverlay with custom cutout and dynamic pulsing status colors, top-aligned LivenessFeedback banner, status pill transitions, and integrated haptic feedback styles.
 - **Admin Enrollment Screen**: Integrated stepper (Capture ➔ Processing ➔ Saved), horizontal scrollable frame viewer with processed checkmarks, user_id uniqueness verification against SQLite database, multi-frame (3-5) embedding averaging with L2-normalization, and encrypted SQLite persistence.
 - **Main Application & Demo Auth Screen**: Embedded the compact FaceAuthenticator card, added success cards displaying nullable GPS coordinates and scores, created a scrollable recent logs SQLite view, configured stack-based navigation (DemoAuthScreen and EnrollmentScreen), and set up global network auto-sync hooks.

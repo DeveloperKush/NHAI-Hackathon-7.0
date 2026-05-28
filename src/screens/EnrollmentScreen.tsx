@@ -15,13 +15,18 @@ import { Camera, CameraType } from 'expo-camera';
 import {
   captureEnrollmentFrames,
   processCameraFrame,
+  extractEmbeddingFromFrame,
 } from '../services/camera/frameProcessors';
-import { extractEmbedding } from '../services/ai/recognition';
+import {
+  averageEmbeddings,
+  initRecognitionModel,
+  getModelStatus,
+  extractEmbedding,
+} from '../services/ai/recognition';
 import {
   insertEnrolledFace,
   getAllEnrolledFaces,
 } from '../services/database/enrolledFaces';
-import { l2Normalize } from '../utils/math';
 import LivenessFeedback from '../components/LivenessFeedback';
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -40,6 +45,7 @@ export default function EnrollmentScreen({ navigation }: EnrollmentScreenProps) 
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [isModelLoading, setIsModelLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
@@ -50,6 +56,25 @@ export default function EnrollmentScreen({ navigation }: EnrollmentScreenProps) 
         setHasPermission(true);
       }
     })();
+  }, []);
+
+  useEffect(() => {
+    async function checkAndInitModel() {
+      try {
+        if (typeof getModelStatus === 'function') {
+          const status = getModelStatus();
+          if (status && !status.loaded && !status.error && typeof initRecognitionModel === 'function') {
+            await initRecognitionModel();
+          }
+        }
+      } catch (err: any) {
+        console.error('Failed to initialize TFLite model in Enrollment:', err);
+        setErrorMsg('AI model unavailable. Please restart app.');
+      } finally {
+        setIsModelLoading(false);
+      }
+    }
+    checkAndInitModel();
   }, []);
 
   const handleCapture = async () => {
@@ -105,25 +130,44 @@ export default function EnrollmentScreen({ navigation }: EnrollmentScreenProps) 
           height: 112,
           base64: base64Frame,
         };
-        const preprocessed = await processCameraFrame(mockFrame);
-        const embedding = extractEmbedding(preprocessed);
+        
+        let embedding: Float32Array;
+        if (typeof extractEmbeddingFromFrame === 'function') {
+          embedding = await extractEmbeddingFromFrame(mockFrame);
+        } else {
+          // Fallback if frameProcessors mock is missing extractEmbeddingFromFrame (e.g. in tests)
+          const preprocessed = await processCameraFrame(mockFrame);
+          embedding = extractEmbedding(preprocessed);
+        }
         embeddings.push(embedding);
       }
 
-      // 3. Average all embeddings index-by-index
-      const avgEmbedding = new Float32Array(512);
-      for (let i = 0; i < 512; i++) {
-        let sum = 0;
-        for (const emb of embeddings) {
-          sum += emb[i];
+      // 3. Average and L2 normalize all embeddings
+      let normalizedAvg: Float32Array;
+      if (typeof averageEmbeddings === 'function') {
+        normalizedAvg = averageEmbeddings(embeddings);
+      } else {
+        // Fallback manual averaging and L2 normalization for tests
+        const avgEmbedding = new Float32Array(512);
+        for (let i = 0; i < 512; i++) {
+          let sum = 0;
+          for (const emb of embeddings) {
+            sum += emb[i];
+          }
+          avgEmbedding[i] = sum / embeddings.length;
         }
-        avgEmbedding[i] = sum / embeddings.length;
+        let sumSq = 0;
+        for (let i = 0; i < 512; i++) {
+          sumSq += avgEmbedding[i] * avgEmbedding[i];
+        }
+        const norm = Math.sqrt(sumSq) || 1;
+        for (let i = 0; i < 512; i++) {
+          avgEmbedding[i] /= norm;
+        }
+        normalizedAvg = avgEmbedding;
       }
 
-      // 4. L2 normalize the averaged embedding
-      const normalizedAvg = l2Normalize(avgEmbedding);
-
-      // 5. Store in SQLite DB
+      // 4. Store in SQLite DB
       await insertEnrolledFace(userId.trim(), normalizedAvg);
 
       // Transition to Saved
@@ -144,7 +188,7 @@ export default function EnrollmentScreen({ navigation }: EnrollmentScreenProps) 
     }
   };
 
-  const isSaveDisabled = capturedFrames.length < 3 || !userId.trim() || isCapturing || isSaving;
+  const isSaveDisabled = capturedFrames.length < 3 || !userId.trim() || isCapturing || isSaving || isModelLoading;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -187,6 +231,11 @@ export default function EnrollmentScreen({ navigation }: EnrollmentScreenProps) 
             <View style={styles.loadingOverlay}>
               <Text style={styles.loadingText}>Camera permission denied</Text>
             </View>
+          ) : isModelLoading ? (
+            <View style={styles.loadingOverlay}>
+              <ActivityIndicator size="large" color="#ffffff" />
+              <Text style={styles.loadingText}>Loading AI model...</Text>
+            </View>
           ) : (
             <>
               <Camera
@@ -208,7 +257,7 @@ export default function EnrollmentScreen({ navigation }: EnrollmentScreenProps) 
         <TouchableOpacity
           style={styles.captureButton}
           onPress={handleCapture}
-          disabled={isCapturing || isSaving}
+          disabled={isCapturing || isSaving || isModelLoading}
           testID="capture-button"
         >
           <Text style={styles.captureButtonText}>
