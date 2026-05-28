@@ -1,10 +1,18 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { FaceAuthenticatorProps } from '../types';
 import { useAuth } from '../hooks/useAuth';
 import CameraOverlay from './CameraOverlay';
 import LivenessFeedback from './LivenessFeedback';
+import { WebView } from 'react-native-webview';
+import {
+  getMediaPipeHTMLUri,
+  MEDIAPIPE_CACHE_DIR,
+  setWebViewRef,
+  handleWebViewMessage,
+  setOnWebViewReady,
+} from '../services/ai/mediapipeLandmarks';
 
 export default function FaceAuthenticator({
   onAuthSuccess,
@@ -13,6 +21,9 @@ export default function FaceAuthenticator({
   similarityThreshold = 0.6,
 }: FaceAuthenticatorProps) {
   const cameraRef = useRef<any>(null);
+  const webViewRef = useRef<any>(null);
+  const [webViewReady, setWebViewReady] = useState(false);
+  const authStartedRef = useRef(false);
 
   const { status, logData, error, prompt, startAuth, reset } = useAuth(cameraRef, {
     similarityThreshold,
@@ -21,10 +32,27 @@ export default function FaceAuthenticator({
     onEnrollmentRequired,
   });
 
-  // Start authentication flow automatically on mount
+  // Register callback so auth starts only after MediaPipe WebView is ready
   useEffect(() => {
-    startAuth(true);
+    setOnWebViewReady(() => {
+      setWebViewReady(true);
+    });
   }, []);
+
+  // Start auth once WebView is ready (fires exactly once per mount)
+  useEffect(() => {
+    if (webViewReady && !authStartedRef.current) {
+      authStartedRef.current = true;
+      startAuth(true);
+    }
+  }, [webViewReady]);
+
+  useEffect(() => {
+    setWebViewRef(webViewRef.current);
+    return () => {
+      setWebViewRef(null);
+    };
+  }, [webViewRef.current]);
 
   // Haptic feedback logic
   // 1. Light haptic on challenge change (prompt changes)
@@ -64,7 +92,9 @@ export default function FaceAuthenticator({
 
   // Handle manual retry on failure
   const handleRetry = () => {
+    authStartedRef.current = false;
     reset();
+    // WebView stays mounted and MediaPipe stays ready — start auth directly
     startAuth(true);
   };
 
@@ -109,13 +139,26 @@ export default function FaceAuthenticator({
           )}
         </View>
       </CameraOverlay>
+      <WebView
+        ref={webViewRef}
+        style={{ width: 0, height: 0, opacity: 0, position: 'absolute' }}
+        originWhitelist={['*', 'file://*']}
+        source={{ uri: getMediaPipeHTMLUri() }}
+        onMessage={handleWebViewMessage}
+        allowFileAccess={true}
+        allowFileAccessFromFileURLs={true}
+        allowUniversalAccessFromFileURLs={true}
+        javaScriptEnabled={true}
+        domStorageEnabled={true}
+        mixedContentMode="always"
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
   },
   pillContainer: {
     position: 'absolute',

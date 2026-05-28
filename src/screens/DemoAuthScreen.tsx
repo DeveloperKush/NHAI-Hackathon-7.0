@@ -254,7 +254,8 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   cameraContainer: {
-    height: 350,
+    width: '100%',
+    aspectRatio: 3 / 4,
     borderRadius: 16,
     overflow: 'hidden',
     backgroundColor: '#000000',

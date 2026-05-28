@@ -116,6 +116,10 @@ export async function processCameraFrame(frame: CameraCapturedPicture): Promise<
  * Modifies specific indices to simulate eye blink, smile, and head turn gestures based on frame properties.
  */
 export function simulateLandmarksFromFrame(frame: any, isRealFace: boolean): Landmark[] {
+  const IS_TEST = typeof (global as any).jest !== 'undefined' || process.env.NODE_ENV === 'test';
+  if (!IS_TEST) {
+    throw new Error('simulateLandmarksFromFrame cannot be called in production. Use real MediaPipe landmarks.');
+  }
   const landmarks: Landmark[] = [];
 
   // Generate 468 default landmarks
@@ -231,5 +235,28 @@ export async function captureEnrollmentFrames(cameraRef: any, count: number = 5)
 export async function extractEmbeddingFromFrame(frame: CameraCapturedPicture): Promise<Float32Array> {
   const preprocessed = await processCameraFrame(frame);
   return extractEmbedding(preprocessed);
+}
+
+/**
+ * Captures a low-resolution and low-quality JPEG frame from the camera ref.
+ */
+export async function captureLowResFrame(cameraRef: any, quality = 0.1): Promise<string> {
+  if (cameraRef && typeof cameraRef.takePictureAsync === 'function') {
+    try {
+      const picture = await cameraRef.takePictureAsync({
+        base64: true,
+        quality,
+        skipProcessing: true,
+      });
+      if (picture) {
+        cameraRef._lastPicture = picture;
+      }
+      return picture.base64 || '';
+    } catch (e) {
+      console.error('captureLowResFrame failed:', e);
+      return '';
+    }
+  }
+  return '';
 }
 

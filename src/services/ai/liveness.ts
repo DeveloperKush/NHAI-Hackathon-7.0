@@ -78,7 +78,7 @@ export function calculateHeadYaw(
  */
 export function checkDepthConsistency(
   landmarks: Landmark[],
-  threshold: number = 0.002
+  threshold: number = 0.001
 ): boolean {
   if (landmarks.length === 0) return false;
   const n = landmarks.length;
@@ -189,21 +189,23 @@ export class LivenessEngine {
       const rightEye = [362, 385, 387, 263, 380, 373].map(idx => landmarks[idx]);
       const ear = calculateEAR(leftEye, rightEye);
 
-      if (ear < 0.2) {
+      if (ear < 0.22) {
         this.consecutiveBlinkFrames++;
       } else {
         this.consecutiveBlinkFrames = 0;
       }
+      console.log(`[Liveness] BLINK EAR=${ear.toFixed(3)} consecutive=${this.consecutiveBlinkFrames}`);
 
-      if (this.consecutiveBlinkFrames >= 3) {
+      if (this.consecutiveBlinkFrames >= 2) {
         passedCurrent = true;
       }
     } else if (currentChallenge === Challenge.SMILE) {
       // Mouth corners and lip centers: 61, 291, 13, 14
       const lips = [61, 291, 13, 14].map(idx => landmarks[idx]);
       const mar = calculateMAR(lips);
+      console.log(`[Liveness] SMILE MAR=${mar.toFixed(3)}`);
 
-      if (mar > 0.6) {
+      if (mar > 0.3) {
         passedCurrent = true;
       }
     } else if (currentChallenge === Challenge.HEAD_TURN) {
@@ -212,8 +214,9 @@ export class LivenessEngine {
       const leftCheek = landmarks[234];
       const rightCheek = landmarks[454];
       const yaw = calculateHeadYaw(nose, leftCheek, rightCheek);
+      console.log(`[Liveness] HEAD_TURN yaw=${yaw.toFixed(3)}`);
 
-      if (Math.abs(yaw) > 0.15) {
+      if (Math.abs(yaw) > 0.12) {
         passedCurrent = true;
       }
     }

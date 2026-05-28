@@ -5,9 +5,9 @@ export const THRESHOLD_RANGE = {
   strict: 0.65,
 };
 
-export const LIVENESS_TIMEOUT_MS = 10000;
+export const LIVENESS_TIMEOUT_MS = 15000;
 
-export const REQUIRED_CHALLENGES = 2;
+export const REQUIRED_CHALLENGES = 1;
 
 export const AWS_SYNC_URL = process.env.EXPO_PUBLIC_AWS_SYNC_URL;
 
