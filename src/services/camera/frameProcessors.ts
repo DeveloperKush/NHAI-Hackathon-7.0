@@ -1,115 +1,212 @@
 import { CameraCapturedPicture } from 'expo-camera';
 import { Landmark } from '../ai/liveness';
 import base64 from 'base-64';
-import { applyCLAHE, normalizePixels } from '../../utils/imagePreProc';
+import {
+  applyCLAHE,
+  normalizePixels,
+  decodeBase64Jpeg,
+  globalHistogramEqualizationRGB,
+  applyCLAHERGB,
+} from '../../utils/imagePreProc';
 import { extractEmbedding } from '../ai/recognition';
+import { alignFace } from '../ai/faceAlignment';
 
 /**
- * Preprocesses a camera snapshot: resizes to 112x112 using bilinear interpolation,
- * applies Contrast Limited Adaptive Histogram Equalization (CLAHE), and normalizes pixels to [-1.0, 1.0].
+ * Preprocesses a camera snapshot for recognition: decodes to RGB, aligns the face using 5 landmarks,
+ * applies global histogram equalization (or CLAHE fallback), and normalizes pixels to [-1.0, 1.0].
  */
-export async function processCameraFrame(frame: CameraCapturedPicture): Promise<Float32Array> {
+export async function processRecognitionFrame(
+  frame: CameraCapturedPicture,
+  landmarks?: Landmark[] | null
+): Promise<Float32Array> {
+  let { width, height } = frame;
+  const { base64: base64Str } = frame;
+
+  if (!base64Str) {
+    const pixels = new Uint8Array(112 * 112 * 3);
+    pixels.fill(128);
+    return await normalizePixels(pixels);
+  }
+
+  let rgba: Uint8Array = new Uint8Array(0);
+  let success = false;
+
+  try {
+    const decoded = decodeBase64Jpeg(base64Str);
+    rgba = decoded.data;
+    width = decoded.width;
+    height = decoded.height;
+    success = true;
+  } catch (e) {
+    // Fallback for mock environments (e.g. Jest)
+    try {
+      let cleanBase64 = base64Str;
+      if (cleanBase64.includes(',')) {
+        cleanBase64 = cleanBase64.split(',')[1];
+      }
+      cleanBase64 = cleanBase64.replace(/[^A-Za-z0-9+/=]/g, '');
+      const decodedStr = base64.decode(cleanBase64);
+      const bytes = new Uint8Array(decodedStr.length);
+      for (let i = 0; i < decodedStr.length; i++) {
+        bytes[i] = decodedStr.charCodeAt(i);
+      }
+
+      rgba = new Uint8Array(width * height * 4);
+      if (bytes.length === width * height * 4) {
+        rgba.set(bytes);
+      } else if (bytes.length === width * height) {
+        // Grayscale to RGBA
+        for (let i = 0; i < width * height; i++) {
+          rgba[i * 4] = bytes[i];
+          rgba[i * 4 + 1] = bytes[i];
+          rgba[i * 4 + 2] = bytes[i];
+          rgba[i * 4 + 3] = 255;
+        }
+      } else {
+        // Fill with mock data
+        for (let i = 0; i < width * height; i++) {
+          const val = bytes[i % bytes.length] || 128;
+          rgba[i * 4] = val;
+          rgba[i * 4 + 1] = val;
+          rgba[i * 4 + 2] = val;
+          rgba[i * 4 + 3] = 255;
+        }
+      }
+      success = true;
+    } catch (err) {
+      success = false;
+    }
+  }
+
+  let alignedRGB: Uint8Array;
+  if (success && rgba.length > 0) {
+    // Perform similarity transform face alignment
+    alignedRGB = await alignFace(rgba, width, height, landmarks);
+  } else {
+    alignedRGB = new Uint8Array(112 * 112 * 3);
+    alignedRGB.fill(128);
+  }
+
+  // Calculate mean brightness to decide between global equalization and CLAHE fallback
+  let sum = 0;
+  for (let i = 0; i < alignedRGB.length; i++) {
+    sum += alignedRGB[i];
+  }
+  const meanBrightness = sum / alignedRGB.length;
+
+  let equalized: Uint8Array;
+  if (meanBrightness < 30 || meanBrightness > 225) {
+    // Extreme lighting: apply CLAHE independently to RGB channels
+    equalized = await applyCLAHERGB(alignedRGB, 112, 112);
+  } else {
+    // Normal lighting: apply global histogram equalization
+    equalized = globalHistogramEqualizationRGB(alignedRGB);
+  }
+
+  // Map [0, 255] RGB intensity to [-1.0, 1.0] Float32Array (yields internally)
+  return await normalizePixels(equalized);
+}
+
+/**
+ * Fast processing for liveness check: resizes to 320x240 RGB, no CLAHE, fast conversion.
+ */
+export async function processLivenessFrame(frame: CameraCapturedPicture): Promise<Float32Array> {
   let { width, height } = frame;
   const { base64: base64Str } = frame;
 
   let pixels: Uint8Array = new Uint8Array(0);
   if (base64Str) {
-    let cleanBase64 = base64Str;
-    if (cleanBase64.includes(',')) {
-      cleanBase64 = cleanBase64.split(',')[1];
-    }
-    cleanBase64 = cleanBase64.replace(/[^A-Za-z0-9+/=]/g, '');
+    let cleanBase64 = base64Str.replace(/[^A-Za-z0-9+/=]/g, '');
     const decoded = base64.decode(cleanBase64);
     const bytes = new Uint8Array(decoded.length);
     for (let i = 0; i < decoded.length; i++) {
       bytes[i] = decoded.charCodeAt(i);
     }
 
-    let decodedWidth = width;
-    let decodedHeight = height;
-    let success = false;
-
     try {
       const jpeg = require('jpeg-js');
       const jpegData = jpeg.decode(bytes, { useTArray: true });
-      decodedWidth = jpegData.width;
-      decodedHeight = jpegData.height;
+      width = jpegData.width;
+      height = jpegData.height;
       const rgba = jpegData.data;
       
-      // Convert RGBA to Grayscale on the fly
-      const grayscale = new Uint8Array(decodedWidth * decodedHeight);
-      for (let i = 0; i < decodedWidth * decodedHeight; i++) {
-        const r = rgba[i * 4];
-        const g = rgba[i * 4 + 1];
-        const b = rgba[i * 4 + 2];
-        grayscale[i] = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+      const rgb = new Uint8Array(width * height * 3);
+      for (let i = 0; i < width * height; i++) {
+        rgb[i * 3] = rgba[i * 4];
+        rgb[i * 3 + 1] = rgba[i * 4 + 1];
+        rgb[i * 3 + 2] = rgba[i * 4 + 2];
       }
-      pixels = grayscale;
-      width = decodedWidth;
-      height = decodedHeight;
-      success = true;
+      pixels = rgb;
     } catch (e) {
-      // Fallback for mock environments (e.g. Jest) where bytes is not a valid JPEG format
-      success = false;
+      pixels = bytes;
     }
+  }
 
-    if (!success) {
-      if (bytes.length === width * height) {
-        pixels = bytes;
-      } else {
-        // If base64 length is different (e.g. compressed JPEG), use a fixed resolution
-        // for the byte-to-pixel mapping grid to ensure identical features.
-        width = 640;
-        height = 480;
-        pixels = new Uint8Array(width * height);
-        for (let i = 0; i < pixels.length; i++) {
-          pixels[i] = bytes[i % bytes.length] || 128;
-        }
-      }
-    }
-  } else {
-    // If no base64 is present, fallback to solid middle gray pixels
-    pixels = new Uint8Array(width * height);
+  if (pixels.length === 0) {
+    pixels = new Uint8Array(width * height * 3);
     pixels.fill(128);
   }
 
-  const destSize = 112;
-  const resized = new Uint8Array(destSize * destSize);
+  const destW = 320;
+  const destH = 240;
+  const resized = new Uint8Array(destW * destH * 3);
 
-  // Resize using bilinear interpolation
-  for (let row = 0; row < destSize; row++) {
-    for (let col = 0; col < destSize; col++) {
-      // Map center of destination pixel to source coordinate
-      const srcX = ((col + 0.5) * width) / destSize - 0.5;
-      const srcY = ((row + 0.5) * height) / destSize - 0.5;
-
-      const x1 = Math.max(0, Math.min(width - 1, Math.floor(srcX)));
-      const y1 = Math.max(0, Math.min(height - 1, Math.floor(srcY)));
-      const x2 = Math.max(0, Math.min(width - 1, x1 + 1));
-      const y2 = Math.max(0, Math.min(height - 1, y1 + 1));
-
-      const dx = srcX - x1;
-      const dy = srcY - y1;
-
-      const valTL = pixels[y1 * width + x1];
-      const valTR = pixels[y1 * width + x2];
-      const valBL = pixels[y2 * width + x1];
-      const valBR = pixels[y2 * width + x2];
-
-      const top = (1 - dx) * valTL + dx * valTR;
-      const bottom = (1 - dx) * valBL + dx * valBR;
-      const pixelVal = (1 - dy) * top + dy * bottom;
-
-      resized[row * destSize + col] = Math.max(0, Math.min(255, Math.round(pixelVal)));
+  // Resize using nearest neighbor for maximum speed
+  for (let row = 0; row < destH; row++) {
+    for (let col = 0; col < destW; col++) {
+      const srcX = Math.floor((col * width) / destW);
+      const srcY = Math.floor((row * height) / destH);
+      const srcIdx = (srcY * width + srcX) * 3;
+      const dstIdx = (row * destW + col) * 3;
+      
+      resized[dstIdx] = pixels[srcIdx] || 128;
+      resized[dstIdx + 1] = pixels[srcIdx + 1] || 128;
+      resized[dstIdx + 2] = pixels[srcIdx + 2] || 128;
     }
   }
 
-  // Run CLAHE to enhance local contrast in Indian outdoor harsh lighting conditions
-  const equalized = applyCLAHE(resized, destSize, destSize);
-
-  // Map [0, 255] grayscale intensity to [-1.0, 1.0] Float32Array
-  return normalizePixels(equalized);
+  // Normalize directly (NO CLAHE)
+  return await normalizePixels(resized);
 }
+
+/**
+ * Fast nearest-neighbor crop and resize from 320x240 to 112x112.
+ */
+export function fastResize112x112(
+  src: Float32Array,
+  srcW: number,
+  srcH: number
+): Float32Array {
+  const dstW = 112;
+  const dstH = 112;
+  const dst = new Float32Array(dstW * dstH * 3);
+  
+  // Center crop to square
+  const cropSize = Math.min(srcW, srcH);
+  const cropX = Math.floor((srcW - cropSize) / 2);
+  const cropY = Math.floor((srcH - cropSize) / 2);
+  
+  const scaleX = cropSize / dstW;
+  const scaleY = cropSize / dstH;
+  
+  for (let y = 0; y < dstH; y++) {
+    for (let x = 0; x < dstW; x++) {
+      const srcX = Math.min(cropX + Math.floor(x * scaleX), srcW - 1);
+      const srcY = Math.min(cropY + Math.floor(y * scaleY), srcH - 1);
+      const srcIdx = (srcY * srcW + srcX) * 3;
+      const dstIdx = (y * dstW + x) * 3;
+      
+      dst[dstIdx] = src[srcIdx];
+      dst[dstIdx + 1] = src[srcIdx + 1];
+      dst[dstIdx + 2] = src[srcIdx + 2];
+    }
+  }
+  
+  return dst;
+}
+
+// Backwards compatibility alias
+export const processCameraFrame = processRecognitionFrame;
 
 /**
  * Returns 468 mock landmarks. If isRealFace=true, includes realistic z-axis variance (std dev > 0.002).
@@ -232,8 +329,11 @@ export async function captureEnrollmentFrames(cameraRef: any, count: number = 5)
 /**
  * Captures a camera frame, runs preprocessing, and extracts its 512-dimensional embedding.
  */
-export async function extractEmbeddingFromFrame(frame: CameraCapturedPicture): Promise<Float32Array> {
-  const preprocessed = await processCameraFrame(frame);
+export async function extractEmbeddingFromFrame(
+  frame: CameraCapturedPicture,
+  landmarks?: Landmark[] | null
+): Promise<Float32Array> {
+  const preprocessed = await processRecognitionFrame(frame, landmarks);
   return extractEmbedding(preprocessed);
 }
 

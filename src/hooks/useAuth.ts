@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
 import { AuthLog, LivenessError, LivenessErrorCode } from '../types';
-import { LivenessEngine, checkDepthConsistency } from '../services/ai/liveness';
+import { LivenessEngine, checkDepthConsistency, Landmark } from '../services/ai/liveness';
 import { extractEmbedding, findBestMatch, generateDeviceId, getModelStatus } from '../services/ai/recognition';
 import { insertAuthLog } from '../services/database/authLogs';
 import { getAllEnrolledFaces } from '../services/database/enrolledFaces';
 import { syncAuthLogs } from '../services/network/awsSync';
-import { processCameraFrame, captureLowResFrame, extractEmbeddingFromFrame } from '../services/camera/frameProcessors';
+import { processCameraFrame, captureLowResFrame, extractEmbeddingFromFrame, processLivenessFrame, fastResize112x112 } from '../services/camera/frameProcessors';
 import { processImageForLandmarks } from '../services/ai/mediapipeLandmarks';
 import { REQUIRED_CHALLENGES, SIMILARITY_THRESHOLD } from '../constants/config';
 import * as Location from 'expo-location';
@@ -38,6 +38,7 @@ export function useAuth(cameraRef: any, options?: UseAuthOptions) {
   const [logData, setLogData] = useState<AuthLog | null>(null);
   const [error, setError] = useState<LivenessError | null>(null);
   const [prompt, setPrompt] = useState<string | null>(null);
+  const livenessEngineRef = useRef<LivenessEngine | null>(null);
 
   const statusRef = useRef<any>('idle');
   const isMountedRef = useRef<boolean>(true);
@@ -103,14 +104,29 @@ export function useAuth(cameraRef: any, options?: UseAuthOptions) {
 
       const reqChallenges = options?.requiredChallenges ?? REQUIRED_CHALLENGES;
       const livenessEngine = new LivenessEngine(reqChallenges);
+      livenessEngineRef.current = livenessEngine;
 
       let success = false;
       let frameCount = 0;
+      let loopCount = 0;
+      let faceDetected = true;
+      let consecutiveNullFrames = 0;
+      let lastLandmarks: Landmark[] | null = null;
+      let lastProcessedFrame: Float32Array | null = null;
 
       // Pre-run depth check and challenges loop
       while (statusRef.current === 'liveness') {
+        // Check if challenge was forced/passed externally
+        if (livenessEngine.getState() === 'PASSED') {
+          success = true;
+          break;
+        } else if (livenessEngine.getState() === 'FAILED') {
+          break;
+        }
+
         const loopStartTime = Date.now();
         frameCount++;
+        loopCount++;
 
         // 1. Capture low-res frame every 100ms
         let base64 = '';
@@ -142,10 +158,25 @@ export function useAuth(cameraRef: any, options?: UseAuthOptions) {
             const { simulateLandmarksFromFrame } = require('../services/camera/frameProcessors');
             landmarks = simulateLandmarksFromFrame(mockFrame, isRealFace);
           } else {
-            landmarks = await processImageForLandmarks(base64);
+            const res = await processImageForLandmarks(base64);
+            landmarks = res ? res.landmarks : null;
           }
 
           if (landmarks) {
+            faceDetected = true;
+            lastLandmarks = landmarks;
+            // Fast Auth Path: process and store the frame
+            try {
+              const frameObj = {
+                uri: 'low_res_frame',
+                width: 320,
+                height: 240,
+                base64: base64,
+              };
+              lastProcessedFrame = await processLivenessFrame(frameObj);
+            } catch (err) {
+              console.error('Failed to process liveness frame in loop:', err);
+            }
             // Passive 3D depth check
             if (!checkDepthConsistency(landmarks)) {
               const livenessError: LivenessError = {
@@ -186,6 +217,50 @@ export function useAuth(cameraRef: any, options?: UseAuthOptions) {
               }
               return;
             }
+          } else {
+            faceDetected = false;
+          }
+        }
+
+        // Track consecutive null frames (no face detected) at the loop level (100ms resolution)
+        if (faceDetected) {
+          consecutiveNullFrames = 0;
+        } else {
+          consecutiveNullFrames++;
+        }
+
+        if (consecutiveNullFrames >= 30) {
+          const livenessError: LivenessError = {
+            code: 'NO_FACE_DETECTED',
+            message: 'Face lost. Please align your face in the frame.',
+          };
+          if (isMountedRef.current) {
+            setError(livenessError);
+            setPrompt(null);
+          }
+          setStatus('failed');
+          if (options?.onLivenessFailed) {
+            options.onLivenessFailed(livenessError);
+          }
+          return;
+        }
+
+        // Check timeout every 10th loop iteration (every 1 second)
+        if (loopCount % 10 === 0) {
+          if (livenessEngine.checkTimeout()) {
+            const livenessError: LivenessError = {
+              code: 'TIMEOUT',
+              message: 'Liveness challenge timed out.',
+            };
+            if (isMountedRef.current) {
+              setError(livenessError);
+              setPrompt(null);
+            }
+            setStatus('failed');
+            if (options?.onLivenessFailed) {
+              options.onLivenessFailed(livenessError);
+            }
+            return;
           }
         }
 
@@ -241,17 +316,29 @@ export function useAuth(cameraRef: any, options?: UseAuthOptions) {
       // Extract embedding from ONE high-quality 112x112 preprocessed frame
       let embedding: Float32Array;
       try {
-        let recognitionFrame: any;
-        if (cameraRef && cameraRef.current && typeof cameraRef.current.takePictureAsync === 'function') {
-          // Capture at quality 0.5 to extract sharp, clear features for recognition
-          recognitionFrame = await cameraRef.current.takePictureAsync({ base64: true, quality: 0.5 });
-          if (recognitionFrame && recognitionFrame.base64) {
-            lastFrameBase64 = recognitionFrame.base64;
-          }
+        console.log('lastProcessedFrame:', 
+          lastProcessedFrame?.length, 
+          'expected:', 320*240*3, 
+          '=', 320*240*3
+        );
+        if (lastProcessedFrame && lastProcessedFrame.length >= 320 * 240 * 3) {
+          // FAST PATH: Use last liveness frame directly
+          const smallFrame = fastResize112x112(lastProcessedFrame, 320, 240);
+          embedding = extractEmbedding(smallFrame);
         } else {
-          recognitionFrame = { uri: 'mock_uri', width: 640, height: 480, base64: 'mock_base_64_data' };
+          // Fallback to slow path if frame missing
+          let recognitionFrame: any;
+          if (cameraRef && cameraRef.current && typeof cameraRef.current.takePictureAsync === 'function') {
+            // Capture at quality 0.5 to extract sharp, clear features for recognition
+            recognitionFrame = await cameraRef.current.takePictureAsync({ base64: true, quality: 0.5 });
+            if (recognitionFrame && recognitionFrame.base64) {
+              lastFrameBase64 = recognitionFrame.base64;
+            }
+          } else {
+            recognitionFrame = { uri: 'mock_uri', width: 640, height: 480, base64: 'mock_base_64_data' };
+          }
+          embedding = await extractEmbeddingFromFrame(recognitionFrame, lastLandmarks || undefined);
         }
-        embedding = await extractEmbeddingFromFrame(recognitionFrame);
       } catch (err: any) {
         console.error('Embedding extraction failed:', err);
         const extractError: LivenessError = {
@@ -350,6 +437,17 @@ export function useAuth(cameraRef: any, options?: UseAuthOptions) {
     }
   };
 
+  const forceChallenge = () => {
+    if (livenessEngineRef.current) {
+      livenessEngineRef.current.forceChallengeDetected();
+      if (isMountedRef.current) {
+        const state = livenessEngineRef.current.getState();
+        const { getPromptForState } = require('../services/ai/liveness');
+        setPrompt(getPromptForState(state));
+      }
+    }
+  };
+
   return {
     status,
     logData,
@@ -357,5 +455,6 @@ export function useAuth(cameraRef: any, options?: UseAuthOptions) {
     prompt,
     startAuth,
     reset,
+    forceChallenge,
   };
 }

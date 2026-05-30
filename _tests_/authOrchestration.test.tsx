@@ -51,7 +51,7 @@ describe('Phase 8: Camera Integration and Auth Orchestration Tests', () => {
     test('processCameraFrame resizes and normalizes frame to 112x112 Float32Array', async () => {
       const processed = await processCameraFrame(mockFrame);
       expect(processed).toBeInstanceOf(Float32Array);
-      expect(processed.length).toBe(112 * 112);
+      expect(processed.length).toBe(112 * 112 * 3);
       
       // Values should be normalized to [-1.0, 1.0]
       for (let i = 0; i < processed.length; i++) {

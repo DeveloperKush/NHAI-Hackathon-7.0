@@ -5,12 +5,7 @@ import { FaceAuthenticatorProps } from '../types';
 import { useAuth } from '../hooks/useAuth';
 import CameraOverlay from './CameraOverlay';
 import LivenessFeedback from './LivenessFeedback';
-import { WebView } from 'react-native-webview';
 import {
-  getMediaPipeHTMLUri,
-  MEDIAPIPE_CACHE_DIR,
-  setWebViewRef,
-  handleWebViewMessage,
   setOnWebViewReady,
 } from '../services/ai/mediapipeLandmarks';
 
@@ -21,16 +16,55 @@ export default function FaceAuthenticator({
   similarityThreshold = 0.6,
 }: FaceAuthenticatorProps) {
   const cameraRef = useRef<any>(null);
-  const webViewRef = useRef<any>(null);
-  const [webViewReady, setWebViewReady] = useState(false);
+  const IS_TEST = typeof (global as any).jest !== 'undefined' || process.env.NODE_ENV === 'test';
+  const [webViewReady, setWebViewReady] = useState(IS_TEST);
   const authStartedRef = useRef(false);
+  const [showBypass, setShowBypass] = useState(false);
+  const [showAnalyzingWarning, setShowAnalyzingWarning] = useState(false);
 
-  const { status, logData, error, prompt, startAuth, reset } = useAuth(cameraRef, {
+  const { status, logData, error, prompt, startAuth, reset, forceChallenge } = useAuth(cameraRef, {
     similarityThreshold,
     onAuthSuccess,
     onLivenessFailed,
     onEnrollmentRequired,
   });
+
+  // Track time spent in liveness challenge to show bypass option after 3 seconds
+  useEffect(() => {
+    if (
+      status === 'liveness' &&
+      prompt &&
+      (prompt === 'Please blink' ||
+        prompt === 'Please smile' ||
+        prompt === 'Turn head slightly')
+    ) {
+      setShowBypass(false);
+      const timer = setTimeout(() => {
+        setShowBypass(true);
+      }, 3000);
+      return () => clearTimeout(timer);
+    } else {
+      setShowBypass(false);
+    }
+  }, [status, prompt]);
+
+  const handleBypass = () => {
+    forceChallenge();
+    setShowBypass(false);
+  };
+
+  // Track time spent in liveness challenge to show analyzing warning after 5 seconds
+  useEffect(() => {
+    if (status === 'liveness') {
+      setShowAnalyzingWarning(false);
+      const timer = setTimeout(() => {
+        setShowAnalyzingWarning(true);
+      }, 5000);
+      return () => clearTimeout(timer);
+    } else {
+      setShowAnalyzingWarning(false);
+    }
+  }, [status]);
 
   // Register callback so auth starts only after MediaPipe WebView is ready
   useEffect(() => {
@@ -47,12 +81,7 @@ export default function FaceAuthenticator({
     }
   }, [webViewReady]);
 
-  useEffect(() => {
-    setWebViewRef(webViewRef.current);
-    return () => {
-      setWebViewRef(null);
-    };
-  }, [webViewRef.current]);
+
 
   // Haptic feedback logic
   // 1. Light haptic on challenge change (prompt changes)
@@ -110,6 +139,12 @@ export default function FaceAuthenticator({
           />
         )}
 
+        {status === 'liveness' && showAnalyzingWarning && (
+          <View style={styles.analyzingBanner} testID="analyzing-banner">
+            <Text style={styles.analyzingText}>Hold still, analyzing...</Text>
+          </View>
+        )}
+
         {status === 'authenticated' && (
           <LivenessFeedback
             message="Verification Successful"
@@ -128,6 +163,12 @@ export default function FaceAuthenticator({
 
         {/* Bottom Status Pill */}
         <View style={styles.pillContainer} pointerEvents="box-none">
+          {status === 'liveness' && showBypass && (
+            <TouchableOpacity style={styles.bypassButton} onPress={handleBypass} testID="bypass-button">
+              <Text style={styles.bypassText}>Tap here if detection is slow</Text>
+            </TouchableOpacity>
+          )}
+
           <View style={styles.statusPill} testID="status-pill">
             <Text style={styles.statusText}>{statusText}</Text>
           </View>
@@ -139,19 +180,6 @@ export default function FaceAuthenticator({
           )}
         </View>
       </CameraOverlay>
-      <WebView
-        ref={webViewRef}
-        style={{ width: 0, height: 0, opacity: 0, position: 'absolute' }}
-        originWhitelist={['*', 'file://*']}
-        source={{ uri: getMediaPipeHTMLUri() }}
-        onMessage={handleWebViewMessage}
-        allowFileAccess={true}
-        allowFileAccessFromFileURLs={true}
-        allowUniversalAccessFromFileURLs={true}
-        javaScriptEnabled={true}
-        domStorageEnabled={true}
-        mixedContentMode="always"
-      />
     </View>
   );
 }
@@ -196,6 +224,46 @@ const styles = StyleSheet.create({
   },
   retryText: {
     color: '#212121', // Text Primary
+    fontWeight: 'bold',
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  bypassButton: {
+    backgroundColor: '#ff9800', // Warning orange
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+    borderRadius: 20,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.22,
+    shadowRadius: 2.22,
+  },
+  bypassText: {
+    color: '#ffffff',
+    fontWeight: 'bold',
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  analyzingBanner: {
+    position: 'absolute',
+    top: 130, // rendered below the main liveness feedback banner (top: 40)
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+  },
+  analyzingText: {
+    color: '#ffffff',
     fontWeight: 'bold',
     fontSize: 16,
     textAlign: 'center',

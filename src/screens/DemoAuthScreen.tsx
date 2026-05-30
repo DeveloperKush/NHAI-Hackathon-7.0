@@ -101,6 +101,20 @@ export default function DemoAuthScreen({ navigation }: DemoAuthScreenProps) {
     }
   };
 
+  const handleClearDatabase = async () => {
+    try {
+      await executeSql('DELETE FROM enrolled_faces');
+      await executeSql('DELETE FROM auth_logs');
+      setToastType('success');
+      setToastMessage('Database cleared successfully!');
+      setActiveLog(null);
+      await fetchRecentLogs();
+    } catch (err: any) {
+      setToastType('error');
+      setToastMessage('Failed to clear database: ' + err.message);
+    }
+  };
+
   // Helper to format timestamps
   const formatTime = (isoString: string) => {
     try {
@@ -163,20 +177,30 @@ export default function DemoAuthScreen({ navigation }: DemoAuthScreenProps) {
         )}
 
         {/* Sync Controls */}
-        {isConnected && (
+        <View style={styles.controlsContainer}>
+          {isConnected && (
+            <TouchableOpacity
+              style={[styles.syncButton, isSyncing && styles.disabledButton]}
+              onPress={handleSyncNow}
+              disabled={isSyncing}
+              testID="sync-button"
+            >
+              {isSyncing ? (
+                <ActivityIndicator size="small" color="#ffffff" />
+              ) : (
+                <Text style={styles.syncButtonText}>Sync Now</Text>
+              )}
+            </TouchableOpacity>
+          )}
+
           <TouchableOpacity
-            style={[styles.syncButton, isSyncing && styles.disabledButton]}
-            onPress={handleSyncNow}
-            disabled={isSyncing}
-            testID="sync-button"
+            style={styles.clearDbButton}
+            onPress={handleClearDatabase}
+            testID="clear-db-button"
           >
-            {isSyncing ? (
-              <ActivityIndicator size="small" color="#ffffff" />
-            ) : (
-              <Text style={styles.syncButtonText}>Sync Now</Text>
-            )}
+            <Text style={styles.clearDbButtonText}>Clear Database</Text>
           </TouchableOpacity>
-        )}
+        </View>
 
         {/* Recent Authentication Logs List */}
         <View style={styles.logsSection}>
@@ -308,6 +332,21 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     backgroundColor: '#757575',
+  },
+  controlsContainer: {
+    gap: 12,
+  },
+  clearDbButton: {
+    backgroundColor: '#f44336', // Warning red
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  clearDbButtonText: {
+    color: '#ffffff',
+    fontWeight: 'bold',
+    fontSize: 16,
   },
   logsSection: {
     gap: 8,

@@ -24,7 +24,7 @@ function getAssetsMap() {
 }
 
 let webViewRef: any = null;
-let pendingResolve: ((landmarks: Landmark[] | null) => void) | null = null;
+let pendingResolve: ((result: { landmarks: Landmark[] | null; confidence: number } | null) => void) | null = null;
 let isWebViewReady = false;
 let onReadyCallback: (() => void) | null = null;
 
@@ -131,7 +131,9 @@ async function writeMediaPipeHTML(): Promise<void> {
 /**
  * Sends image data to WebView for face mesh landmarks extraction.
  */
-export function processImageForLandmarks(base64Jpeg: string): Promise<Landmark[] | null> {
+export function processImageForLandmarks(
+  base64Jpeg: string
+): Promise<{ landmarks: Landmark[] | null; confidence: number } | null> {
   return new Promise((resolve) => {
     if (!webViewRef) {
       console.warn('WebView ref not configured.');
@@ -163,7 +165,10 @@ export function handleWebViewMessage(event: any) {
       }
     } else if (data.type === 'landmarks') {
       if (pendingResolve) {
-        pendingResolve(data.landmarks);
+        pendingResolve({
+          landmarks: data.landmarks,
+          confidence: data.confidence ?? (data.landmarks ? 0.95 : 0.0),
+        });
         pendingResolve = null;
       }
     } else if (data.type === 'error') {
@@ -264,17 +269,18 @@ export const MEDIAPIPE_HTML = `<!DOCTYPE html>
       });
 
       faceMesh.onResults(function(results) {
-        if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'landmarks',
-            landmarks: results.multiFaceLandmarks[0]
-          }));
-        } else {
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'landmarks',
-            landmarks: null
-          }));
+        var landmarks = (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) ? results.multiFaceLandmarks[0] : null;
+        var score = 0.95; // Default fallback confidence
+        if (results.multiFaceDetections && results.multiFaceDetections.length > 0) {
+          score = (results.multiFaceDetections[0].score && results.multiFaceDetections[0].score.length > 0) ? results.multiFaceDetections[0].score[0] : (results.multiFaceDetections[0].score || 0.95);
+        } else if (results.multiFaceDetection) {
+          score = results.multiFaceDetection.score || 0.95;
         }
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'landmarks',
+          landmarks: landmarks,
+          confidence: score
+        }));
       });
 
       window.processImage = function(base64Str) {
