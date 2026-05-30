@@ -21,6 +21,7 @@
     "expo-constants": "~15.4.6",
     "expo-file-system": "~16.0.9",
     "expo-haptics": "~12.8.1",
+    "expo-image-manipulator": "~11.8.0",
     "expo-location": "~16.5.5",
     "expo-sqlite": "~13.4.0",
     "jpeg-js": "^0.4.4",

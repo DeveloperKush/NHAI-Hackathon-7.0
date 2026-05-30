@@ -316,11 +316,6 @@ export function useAuth(cameraRef: any, options?: UseAuthOptions) {
       // Extract embedding from ONE high-quality 112x112 preprocessed frame
       let embedding: Float32Array;
       try {
-        console.log('lastProcessedFrame:', 
-          lastProcessedFrame?.length, 
-          'expected:', 320*240*3, 
-          '=', 320*240*3
-        );
         if (lastProcessedFrame && lastProcessedFrame.length >= 320 * 240 * 3) {
           // FAST PATH: Use last liveness frame directly
           const smallFrame = fastResize112x112(lastProcessedFrame, 320, 240);
