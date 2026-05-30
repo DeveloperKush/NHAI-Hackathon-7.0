@@ -197,7 +197,8 @@ export class LivenessEngine {
    * Shuffles the challenges array and picks the subset to use.
    */
   private resetChallenges(): void {
-    const allChallenges = [Challenge.BLINK, Challenge.SMILE, Challenge.HEAD_TURN];
+    // HACKATHON: smile challenge unreliable on WebView MediaPipe — blink + head turn only
+    const allChallenges = [Challenge.BLINK, Challenge.HEAD_TURN];
     // Fisher-Yates or simple sort shuffle
     const shuffled = [...allChallenges].sort(() => Math.random() - 0.5);
     const count = Math.min(this.requiredChallenges, shuffled.length);
@@ -280,7 +281,7 @@ export class LivenessEngine {
       } else {
         this.consecutiveBlinkFrames = 0;
       }
-      if (this.consecutiveBlinkFrames >= 1) {
+      if (this.consecutiveBlinkFrames >= 2) {
         passedCurrent = true;
       }
     } else if (currentChallenge === Challenge.SMILE) {

@@ -517,3 +517,145 @@ export async function applyCLAHERGB(
   return output;
 }
 
+/** Decoded JPEG bitmap (RGBA) from jpeg-js. */
+export interface DecodedJpegImage {
+  data: Uint8Array;
+  width: number;
+  height: number;
+}
+
+/**
+ * React Native–safe base64 → bytes (no Node Buffer).
+ */
+export function base64ToUint8Array(base64Str: string): Uint8Array {
+  const base64lib = require('base-64') as { decode: (s: string) => string };
+  let cleanBase64 = base64Str;
+  if (cleanBase64.includes(',')) {
+    cleanBase64 = cleanBase64.split(',')[1];
+  }
+  cleanBase64 = cleanBase64.replace(/[^A-Za-z0-9+/=]/g, '');
+  const binaryString = base64lib.decode(cleanBase64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
+}
+
+/**
+ * Decodes raw JPEG bytes to RGBA via jpeg-js.
+ */
+export function decodeJpegBytes(jpegBytes: Uint8Array): DecodedJpegImage {
+  const jpeg = require('jpeg-js') as {
+    decode: (
+      data: Uint8Array,
+      opts: { useTArray: boolean; tolerantDecoding?: boolean }
+    ) => { data: Uint8Array; width: number; height: number };
+  };
+  const jpegData = jpeg.decode(jpegBytes, { useTArray: true, tolerantDecoding: true });
+  console.log('JPEG decoded:', jpegData.width, 'x', jpegData.height, 'bytes', jpegBytes.length);
+  return {
+    data: jpegData.data,
+    width: jpegData.width,
+    height: jpegData.height,
+  };
+}
+
+/**
+ * HACKATHON: nearest-neighbor resize to 112×112 RGB, normalized to [-1, 1] for GhostFaceNet.
+ * Skips CLAHE, alignment, and bilinear resize (~14s saved vs processRecognitionFrame).
+ */
+export function fastResize112x112(rawImage: DecodedJpegImage): Float32Array {
+  const srcW = rawImage.width;
+  const srcH = rawImage.height;
+  const dstW = 112;
+  const dstH = 112;
+  const rgb = new Float32Array(dstW * dstH * 3);
+  const scaleX = srcW / dstW;
+  const scaleY = srcH / dstH;
+
+  for (let y = 0; y < dstH; y++) {
+    for (let x = 0; x < dstW; x++) {
+      const srcX = Math.min(Math.floor(x * scaleX), srcW - 1);
+      const srcY = Math.min(Math.floor(y * scaleY), srcH - 1);
+      const srcIdx = (srcY * srcW + srcX) * 4;
+      const dstIdx = (y * dstW + x) * 3;
+      rgb[dstIdx] = rawImage.data[srcIdx] / 127.5 - 1.0;
+      rgb[dstIdx + 1] = rawImage.data[srcIdx + 1] / 127.5 - 1.0;
+      rgb[dstIdx + 2] = rawImage.data[srcIdx + 2] / 127.5 - 1.0;
+    }
+  }
+  return rgb;
+}
+
+export interface PreprocessStats {
+  rgb: Float32Array;
+  variance: number;
+}
+
+/** Pixel variance of normalized [-1,1] RGB tensor (face >> blank wall). */
+export function computePreprocessVariance(rgb: Float32Array): number {
+  let sum = 0;
+  for (let i = 0; i < rgb.length; i++) {
+    sum += rgb[i];
+  }
+  const mean = sum / rgb.length;
+  let variance = 0;
+  for (let i = 0; i < rgb.length; i++) {
+    const d = rgb[i] - mean;
+    variance += d * d;
+  }
+  return variance / rgb.length;
+}
+
+/** When native resize already produced 112×112, skip expensive NN resize. */
+function normalizeRgba112(rawImage: DecodedJpegImage): Float32Array {
+  const pixels = 112 * 112;
+  const rgb = new Float32Array(pixels * 3);
+  for (let i = 0; i < pixels; i++) {
+    const si = i * 4;
+    const di = i * 3;
+    rgb[di] = rawImage.data[si] / 127.5 - 1.0;
+    rgb[di + 1] = rawImage.data[si + 1] / 127.5 - 1.0;
+    rgb[di + 2] = rawImage.data[si + 2] / 127.5 - 1.0;
+  }
+  return rgb;
+}
+
+/** Logs min/max/variance so distinguishable tensors are visible in Metro. */
+export function logPreprocessStats(rgb: Float32Array, label = 'PREPROCESS'): void {
+  const variance = computePreprocessVariance(rgb);
+  let min = Infinity;
+  let max = -Infinity;
+  for (let i = 0; i < rgb.length; i++) {
+    const v = rgb[i];
+    if (v < min) min = v;
+    if (v > max) max = v;
+  }
+  console.log(label + ':', 'min:', min.toFixed(2), 'max:', max.toFixed(2), 'variance:', variance.toFixed(4));
+}
+
+/**
+ * Fast auth/enrollment path: base64 JPEG → 112×112 normalized Float32Array.
+ */
+export function fastPreprocessFromBase64WithStats(base64Str: string): PreprocessStats {
+  const jpegBytes = base64ToUint8Array(base64Str);
+  const rawImage = decodeJpegBytes(jpegBytes);
+  if (rawImage.width < 1 || rawImage.height < 1 || rawImage.data.length < 4) {
+    throw new Error(
+      `Invalid JPEG decode: ${rawImage.width}x${rawImage.height}, bytes=${rawImage.data.length}`
+    );
+  }
+  const rgb =
+    rawImage.width === 112 && rawImage.height === 112
+      ? normalizeRgba112(rawImage)
+      : fastResize112x112(rawImage);
+  const variance = computePreprocessVariance(rgb);
+  logPreprocessStats(rgb);
+  return { rgb, variance };
+}
+
+export function fastPreprocessFromBase64(base64Str: string): Float32Array {
+  return fastPreprocessFromBase64WithStats(base64Str).rgb;
+}
+

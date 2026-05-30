@@ -190,7 +190,8 @@ export function findBestMatch(
     return { user_id: bestUserId, score: maxScore };
   }
 
-  return { user_id: null, score: 0 };
+  // Return best raw score even when below threshold (debug + failed-auth UI)
+  return { user_id: null, score: maxScore < 0 ? 0 : maxScore };
 }
 
 /**

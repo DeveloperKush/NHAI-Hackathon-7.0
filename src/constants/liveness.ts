@@ -12,13 +12,13 @@ export const EAR_LANDMARKS = {
 export const MAR_INDICES = [61, 291, 13, 14] as const;
 
 export const LIVENESS_THRESHOLDS = {
-  EAR: 0.35,
+  EAR: 0.3,
   MAR: 0.5,
   headYaw: 0.12,
 };
 
 // Individual thresholds for direct convenience imports
-export const EAR_THRESHOLD = 0.35;
+export const EAR_THRESHOLD = 0.3;
 export const MAR_THRESHOLD = 0.5;
 export const HEAD_YAW_THRESHOLD = 0.12;
 export const SMILE_THRESHOLD = 0.25;

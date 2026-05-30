@@ -12,11 +12,8 @@ import {
   Dimensions,
 } from 'react-native';
 import { Camera, CameraType } from 'expo-camera';
-import {
-  captureEnrollmentFrames,
-  processCameraFrame,
-  extractEmbeddingFromFrame,
-} from '../services/camera/frameProcessors';
+import { captureEnrollmentFrames } from '../services/camera/frameProcessors';
+import { preprocessRecognitionBase64 } from '../utils/recognitionPreprocess';
 import {
   averageEmbeddings,
   initRecognitionModel,
@@ -28,9 +25,8 @@ import {
   getAllEnrolledFaces,
 } from '../services/database/enrolledFaces';
 import LivenessFeedback from '../components/LivenessFeedback';
-import { processImageForLandmarks } from '../services/ai/mediapipeLandmarks';
-import { checkFrameQuality } from '../utils/imagePreProc';
 import { Landmark } from '../services/ai/liveness';
+import { RECOGNITION_PICTURE_SIZE } from '../constants/camera';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -96,7 +92,7 @@ export default function EnrollmentScreen({ navigation }: EnrollmentScreenProps) 
     const IS_TEST = typeof (global as any).jest !== 'undefined' || process.env.NODE_ENV === 'test';
     if (IS_TEST) {
       try {
-        const frames = await captureEnrollmentFrames(cameraRef.current, 5);
+        const frames = await captureEnrollmentFrames(cameraRef.current, 3);
         setCapturedFrames(frames);
         enrollmentLandmarksRef.current = frames.map(() => null);
       } catch (err: any) {
@@ -107,71 +103,15 @@ export default function EnrollmentScreen({ navigation }: EnrollmentScreenProps) 
       return;
     }
 
-    const targetCount = 5;
-    const validFrames: string[] = [];
-    const validLandmarks: (Landmark[] | null)[] = [];
-
+    // HACKATHON: rapid 3-frame capture — skip per-frame MediaPipe quality gate (~60s saved)
     try {
-      while (validFrames.length < targetCount) {
-        setQualityStatus(`Capturing frame ${validFrames.length + 1}/${targetCount}...`);
-        
-        // 1. Capture one frame base64
-        let base64Photo = '';
-        if (cameraRef.current && typeof cameraRef.current.takePictureAsync === 'function') {
-          const picture = await cameraRef.current.takePictureAsync({
-            base64: true,
-            quality: 0.5,
-          });
-          base64Photo = picture?.base64 || '';
-        } else {
-          base64Photo = `mock_base64_encoded_jpeg_capture_${validFrames.length}`;
-        }
-
-        if (!base64Photo) {
-          setErrorMsg('Failed to capture frame from camera.');
-          break;
-        }
-
-        // Setup 5s timeout for quality checks
-        skipQualityCheckRef.current = false;
-        setShowSkipQuality(false);
-        const timeoutTimer = setTimeout(() => {
-          setShowSkipQuality(true);
-        }, 5000);
-
-        setQualityStatus("Checking landmarks...");
-        let landmarksResult: any = null;
-        landmarksResult = await processImageForLandmarks(base64Photo);
-
-        // Live status updates
-        setQualityStatus("Checking lighting...");
-        await new Promise(resolve => setTimeout(resolve, 150));
-
-        setQualityStatus("Checking sharpness...");
-        await new Promise(resolve => setTimeout(resolve, 150));
-
-        setQualityStatus("Aligning face...");
-        await new Promise(resolve => setTimeout(resolve, 150));
-
-        clearTimeout(timeoutTimer);
-        setShowSkipQuality(false);
-
-        const isSkipped = skipQualityCheckRef.current;
-        const gateResult = checkFrameQuality(base64Photo, landmarksResult);
-
-        if (gateResult.passed || isSkipped) {
-          validFrames.push(base64Photo);
-          validLandmarks.push(landmarksResult?.landmarks || null);
-          setCapturedFrames([...validFrames]);
-          enrollmentLandmarksRef.current = [...validLandmarks];
-        } else {
-          setQualityStatus(`Rejected: ${gateResult.reason || 'quality check failed'}. Retrying...`);
-          // Wait briefly before retrying so the user can adjust position
-          await new Promise(resolve => setTimeout(resolve, 1500));
-        }
-      }
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to capture frames.');
+      setQualityStatus('Capturing 3 frames…');
+      const frames = await captureEnrollmentFrames(cameraRef.current, 3);
+      setCapturedFrames(frames);
+      enrollmentLandmarksRef.current = frames.map(() => null);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to capture frames.';
+      setErrorMsg(message);
     } finally {
       setIsCapturing(false);
       setQualityStatus(null);
@@ -211,30 +151,36 @@ export default function EnrollmentScreen({ navigation }: EnrollmentScreenProps) 
       setProcessingProgress(`Processing frame 0/${capturedFrames.length}...`);
       let processedCount = 0;
 
-      const promises = capturedFrames.map(async (base64Frame, idx) => {
-        const mockFrame = {
-          uri: 'mock_frame_uri',
-          width: 112,
-          height: 112,
-          base64: base64Frame,
-        };
-        
+      // Sequential on JS thread — parallel Promise.all does not speed CPU-bound jpeg decode
+      const embeddings: Float32Array[] = [];
+      for (let idx = 0; idx < capturedFrames.length; idx++) {
+        const base64Frame = capturedFrames[idx];
+        setProcessingProgress(`Processing frame ${idx + 1}/${capturedFrames.length}...`);
+
+        const IS_TEST =
+          typeof (global as { jest?: unknown }).jest !== 'undefined' ||
+          process.env.NODE_ENV === 'test';
         let embedding: Float32Array;
-        const frameLandmarks = enrollmentLandmarksRef.current[idx];
-        if (typeof extractEmbeddingFromFrame === 'function') {
-          embedding = await extractEmbeddingFromFrame(mockFrame, frameLandmarks || undefined);
-        } else {
-          // Fallback if frameProcessors mock is missing extractEmbeddingFromFrame (e.g. in tests)
+        if (IS_TEST && base64Frame.startsWith('mock')) {
+          const mockFrame = {
+            uri: 'mock_frame_uri',
+            width: 112,
+            height: 112,
+            base64: base64Frame,
+          };
+          const frameLandmarks = enrollmentLandmarksRef.current[idx];
+          const { processCameraFrame } = require('../services/camera/frameProcessors');
           const preprocessed = await processCameraFrame(mockFrame, frameLandmarks || undefined);
           embedding = extractEmbedding(preprocessed);
+        } else {
+          const t0 = Date.now();
+          const { rgb } = preprocessRecognitionBase64(base64Frame);
+          embedding = extractEmbedding(rgb);
+          console.log(`ENROLL frame ${idx + 1}:`, Date.now() - t0, 'ms');
         }
-        
+        embeddings.push(embedding);
         processedCount++;
-        setProcessingProgress(`Processing frame ${processedCount}/${capturedFrames.length}...`);
-        return embedding;
-      });
-
-      const embeddings = await Promise.all(promises);
+      }
       setProcessingProgress(null);
 
       // 3. Average and L2 normalize all embeddings
@@ -337,11 +283,12 @@ export default function EnrollmentScreen({ navigation }: EnrollmentScreenProps) 
                 ref={cameraRef}
                 style={styles.camera}
                 type={CameraType.front}
+                pictureSize={RECOGNITION_PICTURE_SIZE}
               />
               {isCapturing && (
                 <View style={styles.loadingOverlay}>
                   <ActivityIndicator size="large" color="#ffffff" />
-                  <Text style={styles.loadingText}>{qualityStatus || 'Capturing 5 Frames…'}</Text>
+                  <Text style={styles.loadingText}>{qualityStatus || 'Capturing 3 Frames…'}</Text>
                   {showSkipQuality && (
                     <TouchableOpacity
                       style={styles.skipButton}
@@ -368,7 +315,7 @@ export default function EnrollmentScreen({ navigation }: EnrollmentScreenProps) 
           testID="capture-button"
         >
           <Text style={styles.captureButtonText}>
-            {isCapturing ? 'Capturing…' : 'Capture Face (5 Frames)'}
+            {isCapturing ? 'Capturing…' : 'Capture Face (3 Frames)'}
           </Text>
         </TouchableOpacity>
 

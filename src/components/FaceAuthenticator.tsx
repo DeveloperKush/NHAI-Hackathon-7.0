@@ -8,12 +8,13 @@ import LivenessFeedback from './LivenessFeedback';
 import {
   setOnWebViewReady,
 } from '../services/ai/mediapipeLandmarks';
+import { SIMILARITY_THRESHOLD } from '../constants/config';
 
 export default function FaceAuthenticator({
   onAuthSuccess,
   onLivenessFailed,
   onEnrollmentRequired,
-  similarityThreshold = 0.6,
+  similarityThreshold = SIMILARITY_THRESHOLD,
 }: FaceAuthenticatorProps) {
   const cameraRef = useRef<any>(null);
   const IS_TEST = typeof (global as any).jest !== 'undefined' || process.env.NODE_ENV === 'test';
@@ -108,7 +109,7 @@ export default function FaceAuthenticator({
   // Map state to bottom status pill text
   let statusText = 'Ready';
   if (status === 'scanning') {
-    statusText = 'Scanning…';
+    statusText = 'Hold still…';
   } else if (status === 'liveness') {
     statusText = 'Liveness Check';
   } else if (status === 'matching') {

@@ -302,24 +302,20 @@ export function simulateLandmarksFromFrame(frame: any, isRealFace: boolean): Lan
  * Sequential enrollment camera capture: takes count number of pictures, and returns base64 string array.
  */
 export async function captureEnrollmentFrames(cameraRef: any, count: number = 5): Promise<string[]> {
+  const { captureRecognitionBase64 } =
+    require('../../utils/recognitionPreprocess') as typeof import('../../utils/recognitionPreprocess');
   const base64Photos: string[] = [];
 
   for (let i = 0; i < count; i++) {
     if (cameraRef && typeof cameraRef.takePictureAsync === 'function') {
-      const picture = await cameraRef.takePictureAsync({
-        base64: true,
-        quality: 0.5,
-      });
-      if (picture && picture.base64) {
-        base64Photos.push(picture.base64);
-      } else {
+      try {
+        base64Photos.push(await captureRecognitionBase64(cameraRef));
+      } catch {
         base64Photos.push(`mock_base64_encoded_jpeg_capture_${i}`);
       }
     } else {
-      // Mock photo data when running in tests or expo simulator
       base64Photos.push(`mock_base64_encoded_jpeg_capture_${i}`);
     }
-    // Yield execution for sequential capture delay
     await new Promise((resolve) => setTimeout(resolve, 150));
   }
 

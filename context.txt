@@ -110,6 +110,12 @@ Pipeline: Camera → MediaPipe Face Mesh (liveness) → JPEG Decode (jpeg-js) �
 - Idempotency: duplicate log_ids are acknowledged but not reprocessed
 
 ## 4. Implementation Status
+| Fix | Status | Notes |
+|-----|--------|-------|
+| Phase 1 fast auth | DONE | useAuth: minimal jpeg→112×112 path, liveness bypass on device |
+| Phase 2 fast enroll | DONE | 3 frames, parallel fastPreprocessFromBase64 in EnrollmentScreen |
+| Phase 3 liveness | PARTIAL | SMILE removed from pool; EAR=0.30, 2 blink frames; liveness bypassed on device |
+
 | Phase | Status | Files |
 |-------|--------|-------|
 | 0. Scaffolding | DONE | package.json, app.json, eas.json, tsconfig.json, .env.example, full src/ tree |
@@ -144,12 +150,14 @@ Pipeline: Camera → MediaPipe Face Mesh (liveness) → JPEG Decode (jpeg-js) �
 - Phase 10 complete. Enrollment averages 3-5 frame embeddings. Stepper UI for admin clarity.
 - Phase 11 complete. E2E flow tested: enroll → auth → log → sync → purge.
 - Phase 12 complete. Codebase polished, noEmit: true configured in tsconfig, and documentation updated.
+- Hackathon fix: imagePreProc fast path (base64ToUint8Array, fastResize112x112) bypasses 14s CLAHE pipeline. Re-enroll required after fix.
 
 ## 6. Pending Risks
-- None. Real-time TFLite on-device inference successfully integrated.
+- Re-enroll all users after fast-path deploy (old embeddings from broken pipeline).
+- Re-enable liveness on device when MediaPipe stable (HACKATHON_BYPASS_LIVENESS in useAuth).
 
 ## 7. Next Step
-- Complete NHAI Hackathon 7.0 deployment.
+- Manual device test: enroll 3 frames, auth face/ceiling/teammate; verify PREPROCESS variance and AUTH_MATCH scores in Metro.
 
 ## 8. Handoff Rules for Teammates
 - Read this file first before any new prompt.

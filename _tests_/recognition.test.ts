@@ -65,37 +65,27 @@ describe('Face Recognition Engine Tests', () => {
     expect(match.score).toBe(0);
   });
 
-  test('findBestMatch respects similarity threshold (0.6)', () => {
-    // Construct orthogonal unit vectors u and w
+  test('findBestMatch respects similarity threshold (0.91)', () => {
     const u = new Float32Array(512);
-    u[0] = 1.0; // u is [1, 0, 0, ...]
-    
-    const w = new Float32Array(512);
-    w[1] = 1.0; // w is [0, 1, 0, ...]
+    u[0] = 1.0;
 
-    // S = 0.55 (similar vector, but below threshold 0.6)
-    const v55 = new Float32Array(512);
-    v55[0] = 0.55;
-    v55[1] = Math.sqrt(1 - 0.55 * 0.55);
+    const v88 = new Float32Array(512);
+    v88[0] = 0.88;
+    v88[1] = Math.sqrt(1 - 0.88 * 0.88);
 
-    // S = 0.65 (similar vector, above threshold 0.6)
-    const v65 = new Float32Array(512);
-    v65[0] = 0.65;
-    v65[1] = Math.sqrt(1 - 0.65 * 0.65);
+    const v92 = new Float32Array(512);
+    v92[0] = 0.92;
+    v92[1] = Math.sqrt(1 - 0.92 * 0.92);
 
-    const enrolled = [
-      { user_id: 'user-a', embedding: u }
-    ];
+    const enrolled = [{ user_id: 'user-a', embedding: u }];
 
-    // Query with 0.55 similarity -> must return null user_id
-    const match55 = findBestMatch(v55, enrolled);
-    expect(match55.user_id).toBeNull();
-    expect(match55.score).toBe(0);
+    const match88 = findBestMatch(v88, enrolled);
+    expect(match88.user_id).toBeNull();
+    expect(match88.score).toBeCloseTo(0.88, 5);
 
-    // Query with 0.65 similarity -> must return 'user-a'
-    const match65 = findBestMatch(v65, enrolled);
-    expect(match65.user_id).toBe('user-a');
-    expect(match65.score).toBeCloseTo(0.65, 5);
+    const match92 = findBestMatch(v92, enrolled);
+    expect(match92.user_id).toBe('user-a');
+    expect(match92.score).toBeCloseTo(0.92, 5);
   });
 
   test('generateDeviceId returns stable mock installation ID from Constants', () => {

@@ -1,9 +1,13 @@
-export const SIMILARITY_THRESHOLD = 0.6;
+/** Genuine match; ceiling/spoof samples in testing scored ~0.88 vs face ~0.92. */
+export const SIMILARITY_THRESHOLD = 0.91;
 
 export const THRESHOLD_RANGE = {
-  permissive: 0.55,
-  strict: 0.65,
+  permissive: 0.88,
+  strict: 0.93,
 };
+
+/** Reject blank walls/ceilings before embedding (face ~0.19, ceiling ~0.03). */
+export const MIN_PREPROCESS_VARIANCE = 0.06;
 
 export const LIVENESS_TIMEOUT_MS = 15000;
 

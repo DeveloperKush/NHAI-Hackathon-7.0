@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View, Animated, Dimensions, SafeAreaView, ActivityIndicator, Text } from 'react-native';
 import { Camera, CameraType } from 'expo-camera';
+import { RECOGNITION_PICTURE_SIZE } from '../constants/camera';
 
 export interface CameraOverlayProps {
   cameraRef: React.RefObject<any>;
@@ -100,6 +101,7 @@ export default function CameraOverlay({ cameraRef, status, children }: CameraOve
           ref={cameraRef}
           style={StyleSheet.absoluteFillObject}
           type={CameraType.front}
+          pictureSize={RECOGNITION_PICTURE_SIZE}
         />
       )}
 
