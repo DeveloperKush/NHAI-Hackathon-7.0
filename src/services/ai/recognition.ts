@@ -1,7 +1,13 @@
 import type { TensorflowModel } from 'react-native-fast-tflite';
 import Constants from 'expo-constants';
 import { cosineSimilarity, l2Normalize } from '../../utils/math';
-import { SIMILARITY_THRESHOLD } from '../../constants/config';
+import {
+  MIN_MATCH_MARGIN,
+  MIN_MATCH_RATIO,
+  SIMILARITY_HIGH_CONFIDENCE,
+  SIMILARITY_SINGLE_USER_THRESHOLD,
+  SIMILARITY_THRESHOLD,
+} from '../../constants/config';
 
 let model: TensorflowModel | null = null;
 let initError: Error | null = null;
@@ -161,6 +167,13 @@ export function extractEmbedding(imageData: Float32Array): Float32Array {
   return l2Normalize(outputFloat);
 }
 
+export interface MatchResult {
+  user_id: string | null;
+  score: number;
+  /** Set when user_id is null — not a face-detection failure. */
+  rejectReason?: string;
+}
+
 /**
  * Compares query embedding against enrolled faces and returns the best match
  * if its similarity score exceeds the threshold.
@@ -168,30 +181,64 @@ export function extractEmbedding(imageData: Float32Array): Float32Array {
 export function findBestMatch(
   embedding: Float32Array,
   enrolledFaces: { user_id: string; embedding: Float32Array }[]
-): { user_id: string | null; score: number } {
+): MatchResult {
   if (!enrolledFaces || enrolledFaces.length === 0) {
     return { user_id: null, score: 0 };
   }
 
-  let maxScore = -1;
+  let bestScore = -1;
   let bestUserId: string | null = null;
-  const threshold = SIMILARITY_THRESHOLD;
+  let secondScore = -1;
 
   for (const face of enrolledFaces) {
     const score = cosineSimilarity(embedding, face.embedding);
-    console.log(`Checking match for user_id: ${face.user_id}, score: ${score}, current max: ${maxScore}`);
-    if (score > maxScore) {
-      maxScore = score;
+    const isBest = score > bestScore;
+    console.log(`Match user_id=${face.user_id} score=${score.toFixed(4)}${isBest ? ' (best)' : ''}`);
+    if (isBest) {
+      secondScore = bestScore;
+      bestScore = score;
       bestUserId = face.user_id;
+    } else if (score > secondScore) {
+      secondScore = score;
     }
   }
 
-  if (maxScore > threshold) {
-    return { user_id: bestUserId, score: maxScore };
+  const margin = secondScore < 0 ? bestScore : bestScore - secondScore;
+  const ratio = secondScore > 0.01 ? bestScore / secondScore : bestScore;
+  const multiUser = enrolledFaces.length > 1;
+
+  const highConfidence = bestScore >= SIMILARITY_HIGH_CONFIDENCE;
+  const marginOk = !multiUser || margin >= MIN_MATCH_MARGIN;
+  const ratioOk = !multiUser || highConfidence || ratio >= MIN_MATCH_RATIO;
+  const multiPass = bestScore >= SIMILARITY_THRESHOLD && marginOk && ratioOk;
+  const singlePass = bestScore >= SIMILARITY_SINGLE_USER_THRESHOLD;
+
+  const accepted = multiUser ? highConfidence || multiPass : highConfidence || singlePass;
+
+  console.log(
+    `Match decision: best=${bestScore.toFixed(4)} id=${bestUserId} margin=${margin.toFixed(4)} ` +
+      `ratio=${ratio.toFixed(3)} multi=${multiUser} accepted=${accepted}`
+  );
+
+  if (accepted && bestUserId) {
+    return { user_id: bestUserId, score: bestScore };
   }
 
-  // Return best raw score even when below threshold (debug + failed-auth UI)
-  return { user_id: null, score: maxScore < 0 ? 0 : maxScore };
+  const score = bestScore < 0 ? 0 : bestScore;
+  let rejectReason = `Not recognized (score ${score.toFixed(2)}).`;
+  if (multiUser) {
+    if (bestScore < SIMILARITY_THRESHOLD) {
+      rejectReason = `Score ${score.toFixed(2)} is below required ${SIMILARITY_THRESHOLD}. Move closer or re-enroll.`;
+    } else if (!marginOk) {
+      rejectReason = `Ambiguous match — two users scored too close (gap ${margin.toFixed(2)}).`;
+    } else if (!ratioOk) {
+      rejectReason = `Ambiguous match — try again with even lighting (ratio ${ratio.toFixed(2)}).`;
+    }
+  } else if (!singlePass && !highConfidence) {
+    rejectReason = `Score ${score.toFixed(2)} is below required ${SIMILARITY_SINGLE_USER_THRESHOLD}.`;
+  }
+
+  return { user_id: null, score, rejectReason };
 }
 
 /**

@@ -46,6 +46,10 @@ export async function insertEnrolledFace(user_id: string, embedding: Float32Arra
     'INSERT OR REPLACE INTO enrolled_faces (user_id, embedding, enrolled_at) VALUES (?, ?, ?)',
     [user_id, encryptedEmbedding, enrolledAt]
   );
+
+  const countResult = await executeSql('SELECT COUNT(*) AS n FROM enrolled_faces');
+  const total = countResult.rows.item(0)?.n ?? 1;
+  console.log('Enrolled face saved:', user_id, '| total in DB:', total);
 }
 
 /**
@@ -69,7 +73,11 @@ export async function getAllEnrolledFaces(): Promise<{ user_id: string; embeddin
     }
   }
 
-  console.log('Retrieved enrolled faces:', faces.length);
+  console.log(
+    'Retrieved enrolled faces:',
+    faces.length,
+    faces.length > 0 ? `ids=[${faces.map((f) => f.user_id).join(', ')}]` : ''
+  );
   return faces;
 }
 

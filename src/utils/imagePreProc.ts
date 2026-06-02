@@ -659,3 +659,20 @@ export function fastPreprocessFromBase64(base64Str: string): Float32Array {
   return fastPreprocessFromBase64WithStats(base64Str).rgb;
 }
 
+/**
+ * Face-aligned 112×112 path (~2–4s): decode → MediaPipe warp → normalize.
+ * Separates genuine faces (0.90+) from ceilings/walls (&lt;0.75).
+ */
+export async function fastPreprocessAlignedFromBase64(
+  base64Str: string,
+  landmarks: { x: number; y: number; z: number }[] | null | undefined
+): Promise<PreprocessStats> {
+  const rawImage = decodeJpegBytes(base64ToUint8Array(base64Str));
+  const { alignFace } = await import('../services/ai/faceAlignment');
+  const alignedRgb = await alignFace(rawImage.data, rawImage.width, rawImage.height, landmarks);
+  const rgb = await normalizePixels(alignedRgb);
+  const variance = computePreprocessVariance(rgb);
+  logPreprocessStats(rgb, 'PREPROCESS_ALIGNED');
+  return { rgb, variance };
+}
+

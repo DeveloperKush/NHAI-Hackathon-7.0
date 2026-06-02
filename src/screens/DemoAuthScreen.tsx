@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   StyleSheet,
   View,
@@ -15,6 +15,8 @@ import { AuthLog, LivenessError } from '../types';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import { syncAuthLogs } from '../services/network/awsSync';
 import { executeSql } from '../services/database/sqlite';
+import { useFocusEffect } from '@react-navigation/native';
+import { useIsFocused } from '@react-navigation/native';
 
 export interface DemoAuthScreenProps {
   navigation: any;
@@ -22,6 +24,7 @@ export interface DemoAuthScreenProps {
 
 export default function DemoAuthScreen({ navigation }: DemoAuthScreenProps) {
   const { isConnected } = useNetworkStatus();
+  const isFocused = useIsFocused();
   
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastType, setToastType] = useState<'success' | 'error' | 'warning'>('success');
@@ -29,6 +32,14 @@ export default function DemoAuthScreen({ navigation }: DemoAuthScreenProps) {
   const [recentLogs, setRecentLogs] = useState<AuthLog[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0); // Trigger to reload camera on retry
+
+  // Remount camera when returning from EnrollmentScreen (fixes blank preview on Android).
+  useFocusEffect(
+    useCallback(() => {
+      setRefreshKey((k) => k + 1);
+      return () => {};
+    }, [])
+  );
 
   // Fetch the last 5 auth logs from SQLite
   const fetchRecentLogs = async () => {
@@ -141,12 +152,16 @@ export default function DemoAuthScreen({ navigation }: DemoAuthScreenProps) {
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         {/* Camera container with fixed height */}
         <View style={styles.cameraContainer}>
-          <FaceAuthenticator
-            key={refreshKey}
-            onAuthSuccess={handleAuthSuccess}
-            onLivenessFailed={handleLivenessFailed}
-            onEnrollmentRequired={handleEnrollmentRequired}
-          />
+          {isFocused ? (
+            <FaceAuthenticator
+              key={refreshKey}
+              onAuthSuccess={handleAuthSuccess}
+              onLivenessFailed={handleLivenessFailed}
+              onEnrollmentRequired={handleEnrollmentRequired}
+            />
+          ) : (
+            <View />
+          )}
         </View>
 
         {/* Detailed Card for the Active Authentication Log */}

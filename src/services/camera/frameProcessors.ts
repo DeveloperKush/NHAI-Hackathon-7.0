@@ -337,6 +337,8 @@ export async function extractEmbeddingFromFrame(
  * Captures a low-resolution and low-quality JPEG frame from the camera ref.
  */
 export async function captureLowResFrame(cameraRef: any, quality = 0.1): Promise<string> {
+  // HACKATHON: throttle "Camera is not running" spam when navigating screens
+  const g = global as unknown as { __lastCameraNotRunningLogAt?: number };
   if (cameraRef && typeof cameraRef.takePictureAsync === 'function') {
     try {
       const picture = await cameraRef.takePictureAsync({
@@ -349,6 +351,16 @@ export async function captureLowResFrame(cameraRef: any, quality = 0.1): Promise
       }
       return picture.base64 || '';
     } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.includes('Camera is not running')) {
+        const now = Date.now();
+        const last = typeof g.__lastCameraNotRunningLogAt === 'number' ? g.__lastCameraNotRunningLogAt : 0;
+        if (now - last > 1500) {
+          g.__lastCameraNotRunningLogAt = now;
+          console.warn('captureLowResFrame: camera not running');
+        }
+        return '';
+      }
       console.error('captureLowResFrame failed:', e);
       return '';
     }

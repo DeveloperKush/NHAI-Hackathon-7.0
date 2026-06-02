@@ -12,13 +12,15 @@ export const EAR_LANDMARKS = {
 export const MAR_INDICES = [61, 291, 13, 14] as const;
 
 export const LIVENESS_THRESHOLDS = {
-  EAR: 0.3,
+  // HACKATHON: raise threshold so blinks register on low FPS landmark sampling
+  EAR: 0.33,
   MAR: 0.5,
   headYaw: 0.12,
 };
 
 // Individual thresholds for direct convenience imports
-export const EAR_THRESHOLD = 0.3;
+// HACKATHON: EAR in logs was ~0.30–0.33 while user blinking; allow slightly higher cutoff
+export const EAR_THRESHOLD = 0.33;
 export const MAR_THRESHOLD = 0.5;
 export const HEAD_YAW_THRESHOLD = 0.12;
 export const SMILE_THRESHOLD = 0.25;

@@ -35,9 +35,7 @@ export default function FaceAuthenticator({
     if (
       status === 'liveness' &&
       prompt &&
-      (prompt === 'Please blink' ||
-        prompt === 'Please smile' ||
-        prompt === 'Turn head slightly')
+      (prompt === 'Please blink' || prompt === 'Turn head slightly')
     ) {
       setShowBypass(false);
       const timer = setTimeout(() => {
@@ -54,17 +52,16 @@ export default function FaceAuthenticator({
     setShowBypass(false);
   };
 
-  // Track time spent in liveness challenge to show analyzing warning after 5 seconds
+  // Show "analyzing" only during matching (not during liveness prompts)
   useEffect(() => {
-    if (status === 'liveness') {
+    if (status === 'matching') {
       setShowAnalyzingWarning(false);
       const timer = setTimeout(() => {
         setShowAnalyzingWarning(true);
-      }, 5000);
+      }, 800);
       return () => clearTimeout(timer);
-    } else {
-      setShowAnalyzingWarning(false);
     }
+    setShowAnalyzingWarning(false);
   }, [status]);
 
   // Register callback so auth starts only after MediaPipe WebView is ready
@@ -74,11 +71,14 @@ export default function FaceAuthenticator({
     });
   }, []);
 
-  // Start auth once WebView is ready (fires exactly once per mount)
+  // Start auth once WebView is ready — brief delay so Camera is running after navigation
   useEffect(() => {
     if (webViewReady && !authStartedRef.current) {
       authStartedRef.current = true;
-      startAuth(true);
+      const timer = setTimeout(() => {
+        startAuth(true);
+      }, IS_TEST ? 0 : 600);
+      return () => clearTimeout(timer);
     }
   }, [webViewReady]);
 
@@ -140,9 +140,9 @@ export default function FaceAuthenticator({
           />
         )}
 
-        {status === 'liveness' && showAnalyzingWarning && (
+        {status === 'matching' && showAnalyzingWarning && (
           <View style={styles.analyzingBanner} testID="analyzing-banner">
-            <Text style={styles.analyzingText}>Hold still, analyzing...</Text>
+            <Text style={styles.analyzingText}>Analyzing…</Text>
           </View>
         )}
 

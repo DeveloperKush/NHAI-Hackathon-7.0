@@ -1,4 +1,4 @@
-import { Challenge, EAR_THRESHOLD, MAR_THRESHOLD, HEAD_YAW_THRESHOLD, SMILE_THRESHOLD } from '../../constants/liveness';
+import { Challenge, EAR_THRESHOLD, HEAD_YAW_THRESHOLD } from '../../constants/liveness';
 
 export type LivenessState = 'READY' | 'WAITING_BLINK' | 'WAITING_SMILE' | 'WAITING_HEAD_TURN' | 'PASSED' | 'FAILED';
 
@@ -252,10 +252,6 @@ export class LivenessEngine {
     const rightEye = [362, 385, 387, 263, 380, 373].map(idx => landmarks[idx]);
     const ear = calculateEAR(leftEye, rightEye);
 
-    const lips = [61, 291, 13, 14].map(idx => landmarks[idx]);
-    const mar = calculateMAR(lips);
-    const smileScore = calculateSmileScore(landmarks, lips);
-
     const nose = landmarks[1];
     const leftCheek = landmarks[234];
     const rightCheek = landmarks[454];
@@ -266,8 +262,6 @@ export class LivenessEngine {
       '[Liveness]',
       this.state,
       'EAR=' + ear.toFixed(3),
-      mar ? 'MAR=' + mar.toFixed(3) : '',
-      'SmileScore=' + smileScore.toFixed(3),
       'yaw=' + yaw.toFixed(3)
     );
 
@@ -281,16 +275,8 @@ export class LivenessEngine {
       } else {
         this.consecutiveBlinkFrames = 0;
       }
-      if (this.consecutiveBlinkFrames >= 2) {
-        passedCurrent = true;
-      }
-    } else if (currentChallenge === Challenge.SMILE) {
-      if (smileScore > SMILE_THRESHOLD) {
-        this.consecutiveSmileFrames++;
-      } else {
-        this.consecutiveSmileFrames = 0;
-      }
-      if (this.consecutiveSmileFrames >= 1) {
+      // HACKATHON: landmarks are sampled ~every 300ms; require 1 hit to avoid missing blinks
+      if (this.consecutiveBlinkFrames >= 1) {
         passedCurrent = true;
       }
     } else if (currentChallenge === Challenge.HEAD_TURN) {

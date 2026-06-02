@@ -65,27 +65,60 @@ describe('Face Recognition Engine Tests', () => {
     expect(match.score).toBe(0);
   });
 
-  test('findBestMatch respects similarity threshold (0.91)', () => {
+  test('findBestMatch single-user accepts from 0.80 (blocks ceiling ~0.77)', () => {
     const u = new Float32Array(512);
     u[0] = 1.0;
 
-    const v88 = new Float32Array(512);
-    v88[0] = 0.88;
-    v88[1] = Math.sqrt(1 - 0.88 * 0.88);
+    const v77 = new Float32Array(512);
+    v77[0] = 0.77;
+    v77[1] = Math.sqrt(1 - 0.77 * 0.77);
 
-    const v92 = new Float32Array(512);
-    v92[0] = 0.92;
-    v92[1] = Math.sqrt(1 - 0.92 * 0.92);
+    const v81 = new Float32Array(512);
+    v81[0] = 0.81;
+    v81[1] = Math.sqrt(1 - 0.81 * 0.81);
 
     const enrolled = [{ user_id: 'user-a', embedding: u }];
 
-    const match88 = findBestMatch(v88, enrolled);
-    expect(match88.user_id).toBeNull();
-    expect(match88.score).toBeCloseTo(0.88, 5);
+    expect(findBestMatch(v77, enrolled).user_id).toBeNull();
+    expect(findBestMatch(v81, enrolled).user_id).toBe('user-a');
+  });
 
-    const match92 = findBestMatch(v92, enrolled);
-    expect(match92.user_id).toBe('user-a');
-    expect(match92.score).toBeCloseTo(0.92, 5);
+  test('findBestMatch multi-user blocks impostor margin (0.85 vs 0.79 at threshold 0.86)', () => {
+    const u = new Float32Array(512);
+    u[0] = 1.0;
+    const w = new Float32Array(512);
+    w[1] = 1.0;
+
+    const impostor = new Float32Array(512);
+    impostor[0] = 0.85;
+    impostor[1] = Math.sqrt(1 - 0.85 * 0.85);
+
+    const enrolled = [
+      { user_id: 'user-a', embedding: u },
+      { user_id: 'user-b', embedding: w },
+    ];
+
+    expect(findBestMatch(impostor, enrolled).user_id).toBeNull();
+  });
+
+  test('findBestMatch multi-user accepts clear winner (0.89 vs 0.79)', () => {
+    const u = new Float32Array(512);
+    u[0] = 1.0;
+    const w = new Float32Array(512);
+    w[1] = 1.0;
+
+    const query = new Float32Array(512);
+    query[0] = 0.89;
+    query[1] = Math.sqrt(1 - 0.89 * 0.89);
+
+    const enrolled = [
+      { user_id: 'user-a', embedding: u },
+      { user_id: 'user-b', embedding: w },
+    ];
+
+    const match = findBestMatch(query, enrolled);
+    expect(match.user_id).toBe('user-a');
+    expect(match.score).toBeCloseTo(0.89, 5);
   });
 
   test('generateDeviceId returns stable mock installation ID from Constants', () => {

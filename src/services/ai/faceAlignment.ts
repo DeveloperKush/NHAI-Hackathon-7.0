@@ -51,13 +51,13 @@ export async function alignFace(
     return await centerCropResize(rgbaData, width, height);
   }
 
-  // 1. Get the 5 points in pixel coordinates (MediaPipe landmarks are normalized [0, 1])
   const srcPoints: Point2D[] = LANDMARK_INDICES.map(idx => {
     const lm = landmarks[idx];
-    return {
-      x: lm.x * width,
-      y: lm.y * height
-    };
+    // MediaPipe WebView: normalized [0,1]; some builds return pixel coords
+    const isNormalized = lm.x >= 0 && lm.x <= 1.5 && lm.y >= 0 && lm.y <= 1.5;
+    return isNormalized
+      ? { x: lm.x * width, y: lm.y * height }
+      : { x: lm.x, y: lm.y };
   });
 
   // 2. Compute centroids

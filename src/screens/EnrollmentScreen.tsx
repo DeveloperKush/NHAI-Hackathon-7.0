@@ -13,13 +13,17 @@ import {
 } from 'react-native';
 import { Camera, CameraType } from 'expo-camera';
 import { captureEnrollmentFrames } from '../services/camera/frameProcessors';
-import { preprocessRecognitionBase64 } from '../utils/recognitionPreprocess';
+import {
+  captureRecognitionBase64,
+  preprocessRecognitionWithFaceGate,
+} from '../utils/recognitionPreprocess';
 import {
   averageEmbeddings,
   initRecognitionModel,
   getModelStatus,
   extractEmbedding,
 } from '../services/ai/recognition';
+import { cosineSimilarity } from '../utils/math';
 import {
   insertEnrolledFace,
   getAllEnrolledFaces,
@@ -174,7 +178,7 @@ export default function EnrollmentScreen({ navigation }: EnrollmentScreenProps) 
           embedding = extractEmbedding(preprocessed);
         } else {
           const t0 = Date.now();
-          const { rgb } = preprocessRecognitionBase64(base64Frame);
+          const { rgb } = await preprocessRecognitionWithFaceGate(base64Frame);
           embedding = extractEmbedding(rgb);
           console.log(`ENROLL frame ${idx + 1}:`, Date.now() - t0, 'ms');
         }
@@ -211,9 +215,39 @@ export default function EnrollmentScreen({ navigation }: EnrollmentScreenProps) 
       // 4. Store in SQLite DB
       await insertEnrolledFace(userId.trim(), normalizedAvg);
 
+      // 5. HACKATHON: verify enrollment quality immediately (reduces "mystery" rejects later)
+      try {
+        setProcessingProgress('Verifying enrollment…');
+        const b1 = await captureRecognitionBase64(cameraRef.current);
+        await new Promise((r) => setTimeout(r, 200));
+        const b2 = await captureRecognitionBase64(cameraRef.current);
+
+        const { rgb: rgb1 } = await preprocessRecognitionWithFaceGate(b1);
+        const { rgb: rgb2 } = await preprocessRecognitionWithFaceGate(b2);
+        const e1 = extractEmbedding(rgb1);
+        const e2 = extractEmbedding(rgb2);
+        const liveAvg = averageEmbeddings([e1, e2]);
+        const score = cosineSimilarity(liveAvg, normalizedAvg);
+        console.log('ENROLL_SELF_CHECK:', userId.trim(), 'score=', score.toFixed(4));
+
+        if (score < 0.78) {
+          setSuccessMsg(
+            `Enrollment saved, but match is weak (${score.toFixed(
+              2
+            )}). Re-enroll in brighter light for reliability.`
+          );
+        } else {
+          setSuccessMsg(`Enrollment Saved Successfully! (check ${score.toFixed(2)})`);
+        }
+      } catch (verifyErr) {
+        console.warn('Enrollment self-check failed:', verifyErr);
+        setSuccessMsg('Enrollment Saved Successfully!');
+      } finally {
+        setProcessingProgress(null);
+      }
+
       // Transition to Saved
       setCurrentStep(3);
-      setSuccessMsg('Enrollment Saved Successfully!');
 
       // Navigate back after delay
       setTimeout(() => {

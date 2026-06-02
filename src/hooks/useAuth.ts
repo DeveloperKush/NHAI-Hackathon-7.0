@@ -1,7 +1,13 @@
 import { useState, useRef, useEffect } from 'react';
 import { AuthLog, LivenessError, LivenessErrorCode } from '../types';
 import { LivenessEngine, checkDepthConsistency, Landmark } from '../services/ai/liveness';
-import { extractEmbedding, findBestMatch, generateDeviceId, getModelStatus } from '../services/ai/recognition';
+import {
+  averageEmbeddings,
+  extractEmbedding,
+  findBestMatch,
+  generateDeviceId,
+  getModelStatus,
+} from '../services/ai/recognition';
 import { insertAuthLog } from '../services/database/authLogs';
 import { getAllEnrolledFaces } from '../services/database/enrolledFaces';
 import { syncAuthLogs } from '../services/network/awsSync';
@@ -12,25 +18,56 @@ import {
 } from '../services/camera/frameProcessors';
 import { processImageForLandmarks } from '../services/ai/mediapipeLandmarks';
 import {
+  captureAndPreprocessRecognition,
   captureRecognitionBase64,
   LowQualityFrameError,
-  preprocessRecognitionBase64,
+  NoFaceDetectedError,
+  preprocessRecognitionWithFaceGate,
 } from '../utils/recognitionPreprocess';
 import { REQUIRED_CHALLENGES, SIMILARITY_THRESHOLD } from '../constants/config';
+import { BORDERLINE_RETRY_BAND, SIMILARITY_SINGLE_USER_THRESHOLD } from '../constants/config';
 import * as Location from 'expo-location';
 
 const IS_TEST_ENV =
   typeof (global as { jest?: unknown }).jest !== 'undefined' || process.env.NODE_ENV === 'test';
 
-// HACKATHON: skip MediaPipe liveness on device for sub-3s auth; Jest still exercises liveness.
-const HACKATHON_BYPASS_LIVENESS = !IS_TEST_ENV;
+// HACKATHON: keep liveness enabled for the demo (blink + head turn only).
+const HACKATHON_BYPASS_LIVENESS = false;
 
-function extractEmbeddingMinimalPath(base64: string): Float32Array {
+async function extractEmbeddingForAuth(
+  cameraRef: { takePictureAsync?: (opts: object) => Promise<{ base64?: string }> } | null,
+  existingBase64?: string
+): Promise<Float32Array> {
   const t0 = Date.now();
-  const { rgb, variance } = preprocessRecognitionBase64(base64);
-  const embedding = extractEmbedding(rgb);
-  console.log('MINIMAL_EXTRACT:', Date.now() - t0, 'ms', 'variance:', variance.toFixed(4));
+  const stats =
+    existingBase64 && IS_TEST_ENV
+      ? preprocessRecognitionBase64SyncForTest(existingBase64)
+      : existingBase64
+        ? await preprocessRecognitionWithFaceGate(existingBase64)
+        : await captureAndPreprocessRecognition(cameraRef ?? {});
+
+  const embedding = extractEmbedding(stats.rgb);
+  console.log('AUTH_EXTRACT:', Date.now() - t0, 'ms variance:', stats.variance.toFixed(4));
   return embedding;
+}
+
+async function extractAveragedEmbeddingForAuth(
+  cameraRef: { takePictureAsync?: (opts: object) => Promise<{ base64?: string }> } | null
+): Promise<{ embedding: Float32Array; lastBase64: string }> {
+  // HACKATHON: 2-shot average reduces false rejects near threshold.
+  const b1 = await captureRecognitionBase64(cameraRef ?? {});
+  await new Promise((r) => setTimeout(r, 200));
+  const b2 = await captureRecognitionBase64(cameraRef ?? {});
+
+  const e1 = await extractEmbeddingForAuth(cameraRef, b1);
+  const e2 = await extractEmbeddingForAuth(cameraRef, b2);
+
+  return { embedding: averageEmbeddings([e1, e2]), lastBase64: b2 };
+}
+
+function preprocessRecognitionBase64SyncForTest(base64: string) {
+  const { preprocessRecognitionBase64 } = require('../utils/recognitionPreprocess') as typeof import('../utils/recognitionPreprocess');
+  return preprocessRecognitionBase64(base64);
 }
 
 export interface UseAuthOptions {
@@ -62,6 +99,7 @@ export function useAuth(cameraRef: any, options?: UseAuthOptions) {
   const [error, setError] = useState<LivenessError | null>(null);
   const [prompt, setPrompt] = useState<string | null>(null);
   const livenessEngineRef = useRef<LivenessEngine | null>(null);
+  const lastCameraNotRunningLogAtRef = useRef<number>(0);
 
   const statusRef = useRef<any>('idle');
   const isMountedRef = useRef<boolean>(true);
@@ -146,14 +184,14 @@ export function useAuth(cameraRef: any, options?: UseAuthOptions) {
         try {
           const authBase64 = await captureRecognitionBase64(cameraRef?.current ?? {});
           lastFrameBase64 = authBase64;
-          embeddingBypass = extractEmbeddingMinimalPath(authBase64);
+          embeddingBypass = await extractEmbeddingForAuth(cameraRef?.current ?? null, authBase64);
         } catch (err: unknown) {
           console.error('Embedding extraction failed:', err);
           const extractError: LivenessError = {
             code: 'NO_FACE_DETECTED',
             message:
-              err instanceof LowQualityFrameError
-                ? 'No face detected. Point camera at your face.'
+              err instanceof LowQualityFrameError || err instanceof NoFaceDetectedError
+                ? err.message
                 : 'Face encoding failed. Please retry.',
           };
           if (isMountedRef.current) {
@@ -165,17 +203,17 @@ export function useAuth(cameraRef: any, options?: UseAuthOptions) {
           return;
         }
 
-        const thresholdBypass = options?.similarityThreshold ?? SIMILARITY_THRESHOLD;
         const bestMatchBypass = findBestMatch(embeddingBypass, enrolledFacesBypass);
         console.log(
           'AUTH_MATCH (bypass):',
           'user_id=',
           bestMatchBypass.user_id,
           'score=',
-          bestMatchBypass.score.toFixed(4)
+          bestMatchBypass.score.toFixed(4),
+          bestMatchBypass.rejectReason ?? ''
         );
 
-        if (bestMatchBypass.user_id !== null && bestMatchBypass.score > thresholdBypass) {
+        if (bestMatchBypass.user_id !== null) {
           let gps_lat: number | null = null;
           let gps_lng: number | null = null;
           try {
@@ -207,10 +245,12 @@ export function useAuth(cameraRef: any, options?: UseAuthOptions) {
           options?.onAuthSuccess?.(authenticatedLog);
           syncAuthLogs().catch((syncErr) => console.warn('Background sync failed:', syncErr));
         } else {
-          const matchError: LivenessError = {
-            code: 'NO_FACE_DETECTED',
-            message: `Face verification failed (score: ${bestMatchBypass.score.toFixed(3)}).`,
-          };
+        const matchError: LivenessError = {
+          code: 'NO_FACE_DETECTED',
+          message:
+            bestMatchBypass.rejectReason ??
+            `Not recognized (score ${bestMatchBypass.score.toFixed(2)}).`,
+        };
           if (isMountedRef.current) {
             setError(matchError);
             setPrompt(null);
@@ -247,6 +287,7 @@ export function useAuth(cameraRef: any, options?: UseAuthOptions) {
       let loopCount = 0;
       let faceDetected = true;
       let consecutiveNullFrames = 0;
+      let cameraNotRunningFailures = 0;
       let lastLandmarks: Landmark[] | null = null;
       let lastProcessedFrame: Float32Array | null = null;
 
@@ -272,7 +313,32 @@ export function useAuth(cameraRef: any, options?: UseAuthOptions) {
             lastFrameBase64 = base64;
           }
         } catch (err) {
-          console.error('Failed to capture low res frame:', err);
+          const msg = err instanceof Error ? err.message : String(err);
+          if (msg.includes('Camera is not running')) {
+            cameraNotRunningFailures++;
+            const now = Date.now();
+            // Throttle noisy logs
+            if (now - lastCameraNotRunningLogAtRef.current > 1500) {
+              lastCameraNotRunningLogAtRef.current = now;
+              console.warn('Camera is not running (liveness loop).');
+            }
+            // HACKATHON: stop loop quickly instead of flooding logs when navigating away.
+            if (cameraNotRunningFailures >= 4) {
+              const camErr: LivenessError = {
+                code: 'TIMEOUT',
+                message: 'Camera not ready. Please reopen the authenticator screen.',
+              };
+              if (isMountedRef.current) {
+                setError(camErr);
+                setPrompt(null);
+              }
+              setStatus('failed');
+              options?.onLivenessFailed?.(camErr);
+              return;
+            }
+          } else {
+            console.error('Failed to capture low res frame:', err);
+          }
         }
 
         // Fallback for mock test environment (Jest)
@@ -449,7 +515,7 @@ export function useAuth(cameraRef: any, options?: UseAuthOptions) {
         }
       }
 
-      // Extract embedding — minimal jpeg decode + resize (no 14s CLAHE path)
+      // Extract embedding — 2-shot average for stability (no 14s CLAHE path)
       let embedding: Float32Array;
       try {
         if (IS_TEST) {
@@ -462,17 +528,17 @@ export function useAuth(cameraRef: any, options?: UseAuthOptions) {
           const preprocessed = await processCameraFrame(mockFrame, lastLandmarks || undefined);
           embedding = extractEmbedding(preprocessed);
         } else {
-          const authBase64 = await captureRecognitionBase64(cameraRef?.current ?? {});
-          lastFrameBase64 = authBase64;
-          embedding = extractEmbeddingMinimalPath(authBase64);
+          const res = await extractAveragedEmbeddingForAuth(cameraRef?.current ?? null);
+          lastFrameBase64 = res.lastBase64;
+          embedding = res.embedding;
         }
       } catch (err: unknown) {
         console.error('Embedding extraction failed:', err);
         const extractError: LivenessError = {
           code: 'NO_FACE_DETECTED',
           message:
-            err instanceof LowQualityFrameError
-              ? 'No face detected. Point camera at your face.'
+            err instanceof LowQualityFrameError || err instanceof NoFaceDetectedError
+              ? err.message
               : 'Face encoding failed. Please retry.',
         };
         if (isMountedRef.current) {
@@ -486,8 +552,6 @@ export function useAuth(cameraRef: any, options?: UseAuthOptions) {
         return;
       }
 
-      // Perform cosine similarity matching
-      const threshold = options?.similarityThreshold ?? SIMILARITY_THRESHOLD;
       const bestMatch = findBestMatch(embedding, enrolledFaces);
       console.log(
         'AUTH_MATCH:',
@@ -495,11 +559,10 @@ export function useAuth(cameraRef: any, options?: UseAuthOptions) {
         bestMatch.user_id,
         'score=',
         bestMatch.score.toFixed(4),
-        'threshold=',
-        threshold
+        bestMatch.rejectReason ?? ''
       );
 
-      if (bestMatch.user_id !== null && bestMatch.score > threshold) {
+      if (bestMatch.user_id !== null) {
         // Authenticated!
         // Retrieve geolocation coordinates (best effort)
         let gps_lat: number | null = null;
@@ -546,9 +609,52 @@ export function useAuth(cameraRef: any, options?: UseAuthOptions) {
         });
       } else {
         // Match failed
+        // HACKATHON: If we are very close to single-user threshold, retry once (users blink/move).
+        if (
+          enrolledFaces.length === 1 &&
+          bestMatch.score >= Math.max(0, SIMILARITY_SINGLE_USER_THRESHOLD - BORDERLINE_RETRY_BAND)
+        ) {
+          try {
+            const res2 = await extractAveragedEmbeddingForAuth(cameraRef?.current ?? null);
+            lastFrameBase64 = res2.lastBase64;
+            const retryMatch = findBestMatch(res2.embedding, enrolledFaces);
+            console.log(
+              'AUTH_RETRY_MATCH:',
+              'user_id=',
+              retryMatch.user_id,
+              'score=',
+              retryMatch.score.toFixed(4),
+              retryMatch.rejectReason ?? ''
+            );
+            if (retryMatch.user_id !== null) {
+              // Let the happy-path code handle it by overwriting bestMatch-like values
+              const authenticatedLog: AuthLog = {
+                log_id: uuidv4(),
+                user_id: retryMatch.user_id,
+                timestamp: new Date().toISOString(),
+                gps_lat: null,
+                gps_lng: null,
+                device_id: generateDeviceId(),
+                similarity_score: retryMatch.score,
+                photo_thumb: lastFrameBase64 || 'mock_base64_jpeg_thumbnail',
+              };
+              await insertAuthLog(authenticatedLog);
+              if (isMountedRef.current) setLogData(authenticatedLog);
+              setStatus('authenticated');
+              options?.onAuthSuccess?.(authenticatedLog);
+              syncAuthLogs().catch((syncErr) =>
+                console.warn('Background logs synchronization failed:', syncErr)
+              );
+              return;
+            }
+          } catch (retryErr) {
+            console.warn('Auth retry failed:', retryErr);
+          }
+        }
+
         const matchError: LivenessError = {
           code: 'NO_FACE_DETECTED',
-          message: `Face verification failed (score: ${bestMatch.score.toFixed(3)}).`,
+          message: bestMatch.rejectReason ?? `Not recognized (score ${bestMatch.score.toFixed(2)}).`,
         };
         if (isMountedRef.current) {
           setError(matchError);
