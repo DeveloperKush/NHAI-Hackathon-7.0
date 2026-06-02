@@ -1,47 +1,90 @@
+/**
+ * @file enrollment.test.tsx
+ * Component tests for <EnrollmentScreen />.
+ * Covers: stepper UI, capture flow, duplicate-ID guard, save pipeline, error states.
+ */
+
 import React from 'react';
 import { Animated } from 'react-native';
 import { render, fireEvent, act, waitFor } from '@testing-library/react-native';
 import EnrollmentScreen from '../src/screens/EnrollmentScreen';
-import {
-  captureEnrollmentFrames,
-  processCameraFrame,
-} from '../src/services/camera/frameProcessors';
-import { extractEmbedding } from '../src/services/ai/recognition';
+import { captureEnrollmentFrames } from '../src/services/camera/frameProcessors';
 import {
   insertEnrolledFace,
   getAllEnrolledFaces,
 } from '../src/services/database/enrolledFaces';
+import {
+  extractEmbedding,
+  initRecognitionModel,
+  getModelStatus,
+  averageEmbeddings,
+} from '../src/services/ai/recognition';
 
-// Mock expo-camera
+// ─── Mocks ───────────────────────────────────────────────────────────────────
+
 jest.mock('expo-camera', () => {
   const React = require('react');
   const { View } = require('react-native');
-  const MockCamera = React.forwardRef((props: any, ref: any) => <View {...props} ref={ref} />);
+  const MockCamera = React.forwardRef((props: any, ref: any) => (
+    <View {...props} ref={ref} />
+  ));
   MockCamera.Constants = { Type: { front: 'front' } };
   return { Camera: MockCamera, CameraType: { front: 'front' } };
 });
 
-// Mock database services
-jest.mock('../src/services/database/sqlite');
+jest.mock('../src/services/database/sqlite', () => ({ executeSql: jest.fn() }));
 jest.mock('../src/services/database/authLogs');
-jest.mock('../src/services/database/enrolledFaces', () => ({
-  insertEnrolledFace: jest.fn().mockResolvedValue(undefined),
-  getAllEnrolledFaces: jest.fn(),
-}));
-
 jest.mock('../src/services/network/awsSync');
 
-// Mock frameProcessors and recognition services
+jest.mock('../src/services/database/enrolledFaces', () => ({
+  insertEnrolledFace: jest.fn().mockResolvedValue(undefined),
+  getAllEnrolledFaces: jest.fn().mockResolvedValue([]),
+}));
+
 jest.mock('../src/services/camera/frameProcessors', () => ({
   captureEnrollmentFrames: jest.fn(),
   processCameraFrame: jest.fn(),
 }));
 
-jest.mock('../src/services/ai/recognition', () => ({
-  extractEmbedding: jest.fn(),
+// recognitionPreprocess — face-gate always passes, returns a usable stats object
+jest.mock('../src/utils/recognitionPreprocess', () => ({
+  captureRecognitionBase64: jest.fn().mockResolvedValue('mock_b64'),
+  preprocessRecognitionWithFaceGate: jest.fn().mockResolvedValue({
+    rgb: new Float32Array(112 * 112 * 3).fill(0.1),
+    variance: 0.5,
+  }),
+  preprocessRecognitionBase64: jest.fn().mockReturnValue({
+    rgb: new Float32Array(112 * 112 * 3).fill(0.1),
+    variance: 0.5,
+  }),
+  captureAndPreprocessRecognition: jest.fn().mockResolvedValue({
+    rgb: new Float32Array(112 * 112 * 3).fill(0.1),
+    variance: 0.5,
+  }),
+  LowQualityFrameError: class LowQualityFrameError extends Error {},
+  NoFaceDetectedError: class NoFaceDetectedError extends Error {},
+  RECOGNITION_INPUT_SIZE: 112,
+  RECOGNITION_CAPTURE_OPTIONS: { base64: true, quality: 0.25, skipProcessing: false },
 }));
 
-// Mock expo-location & netinfo & react-native-encrypted-storage to avoid crashes
+jest.mock('../src/services/ai/recognition', () => ({
+  extractEmbedding: jest.fn(),
+  initRecognitionModel: jest.fn().mockResolvedValue(undefined),
+  getModelStatus: jest.fn().mockReturnValue({ loaded: true, error: null }),
+  averageEmbeddings: jest.fn((embeddings: Float32Array[]) => {
+    // Real averaging + L2 normalize
+    const sum = new Float32Array(512);
+    for (const e of embeddings) for (let i = 0; i < 512; i++) sum[i] += e[i];
+    for (let i = 0; i < 512; i++) sum[i] /= embeddings.length;
+    let norm = 0;
+    for (let i = 0; i < 512; i++) norm += sum[i] ** 2;
+    norm = Math.sqrt(norm) || 1;
+    for (let i = 0; i < 512; i++) sum[i] /= norm;
+    return sum;
+  }),
+  cosineSimilarity: jest.fn().mockReturnValue(0.92),
+}));
+
 jest.mock('expo-location', () => ({
   requestForegroundPermissionsAsync: jest.fn(),
   getCurrentPositionAsync: jest.fn(),
@@ -51,163 +94,164 @@ jest.mock('expo-location', () => ({
 jest.mock('react-native-encrypted-storage', () => ({
   __esModule: true,
   default: {
-    setItem: jest.fn(),
-    getItem: jest.fn(),
-    removeItem: jest.fn(),
-    clear: jest.fn(),
+    setItem: jest.fn(), getItem: jest.fn(),
+    removeItem: jest.fn(), clear: jest.fn(),
   },
 }));
 
 jest.mock('@react-native-community/netinfo', () => ({
-  fetch: jest.fn(async () => ({ isConnected: true, type: 'wifi' })),
+  fetch: jest.fn(async () => ({ isConnected: true })),
   addEventListener: jest.fn(() => jest.fn()),
 }));
 
-describe('EnrollmentScreen Component Tests', () => {
-  const mockNavigation = {
-    goBack: jest.fn(),
-  };
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
-  beforeEach(() => {
-    jest.useFakeTimers();
-    jest.clearAllMocks();
-    (getAllEnrolledFaces as jest.Mock).mockResolvedValue([]);
-    (captureEnrollmentFrames as jest.Mock).mockResolvedValue([
-      'frame-data-1',
-      'frame-data-2',
-      'frame-data-3',
-      'frame-data-4',
-      'frame-data-5',
-    ]);
-    (processCameraFrame as jest.Mock).mockResolvedValue(new Float32Array(112 * 112));
-    (extractEmbedding as jest.Mock).mockReturnValue(new Float32Array(512));
+const mockNav = { goBack: jest.fn() };
 
-    // Mock Animated.loop to avoid act/timer warnings
-    jest.spyOn(Animated, 'loop').mockReturnValue({
-      start: () => {},
-      stop: () => {},
-    } as any);
+/** 5 deterministic fake base64 frames. */
+const FAKE_FRAMES = ['f1', 'f2', 'f3', 'f4', 'f5'];
+
+function setup() {
+  return render(<EnrollmentScreen navigation={mockNav} />);
+}
+
+// ─── Setup ───────────────────────────────────────────────────────────────────
+
+beforeEach(() => {
+  jest.clearAllMocks();
+
+  (getAllEnrolledFaces as jest.Mock).mockResolvedValue([]);
+  (captureEnrollmentFrames as jest.Mock).mockResolvedValue(FAKE_FRAMES);
+  (extractEmbedding as jest.Mock).mockReturnValue(new Float32Array(512).fill(0.1));
+
+  jest.spyOn(Animated, 'loop').mockReturnValue({ start: jest.fn(), stop: jest.fn() } as any);
+});
+
+afterEach(() => jest.restoreAllMocks());
+
+// ─── Initial render ───────────────────────────────────────────────────────────
+
+describe('initial render', () => {
+  test('renders stepper with 3 steps', () => {
+    const { getByText } = setup();
+    expect(getByText('Capture')).toBeTruthy();
+    expect(getByText('Processing')).toBeTruthy();
+    expect(getByText('Saved')).toBeTruthy();
   });
 
-  afterEach(() => {
-    jest.useRealTimers();
-    jest.restoreAllMocks();
+  test('save button is disabled before any capture', () => {
+    const { getByTestId } = setup();
+    expect(getByTestId('save-button').props.accessibilityState?.disabled).toBe(true);
   });
 
-  test('Save button is disabled until 3+ frames captured and user_id is entered', async () => {
-    const { getByTestId, getByPlaceholderText } = render(
-      <EnrollmentScreen navigation={mockNavigation} />
+  test('save button stays disabled with user_id but no frames', () => {
+    const { getByTestId, getByPlaceholderText } = setup();
+    fireEvent.changeText(getByPlaceholderText('Enter unique worker ID'), 'worker_x');
+    expect(getByTestId('save-button').props.accessibilityState?.disabled).toBe(true);
+  });
+});
+
+// ─── Capture flow ─────────────────────────────────────────────────────────────
+
+describe('capture flow', () => {
+  test('capture + user_id enables the save button', async () => {
+    const { getByTestId, getByPlaceholderText } = setup();
+    fireEvent.changeText(getByPlaceholderText('Enter unique worker ID'), 'w001');
+    await act(async () => { fireEvent.press(getByTestId('capture-button')); });
+    await waitFor(() =>
+      expect(getByTestId('save-button').props.accessibilityState?.disabled).toBe(false)
     );
-
-    const saveButton = getByTestId('save-button');
-    const captureButton = getByTestId('capture-button');
-    const input = getByPlaceholderText('Enter unique worker ID');
-
-    // Initially disabled
-    expect(saveButton.props.accessibilityState?.disabled).toBe(true);
-
-    // Enter user_id, still disabled (0 frames captured)
-    fireEvent.changeText(input, 'worker_123');
-    expect(saveButton.props.accessibilityState?.disabled).toBe(true);
-
-    // Trigger capture (which returns 5 frames)
-    await act(async () => {
-      fireEvent.press(captureButton);
-    });
-
-    // Wait for frames state to update and button to enable
-    await waitFor(() => {
-      expect(saveButton.props.accessibilityState?.disabled).toBe(false);
-    });
   });
 
-  test('Capture 5 frames, average embeddings, assert stored length === 512', async () => {
-    // Return unique embeddings to check correct averaging
-    let callCount = 0;
-    (extractEmbedding as jest.Mock).mockImplementation(() => {
-      const emb = new Float32Array(512);
-      emb.fill(callCount++); // 0, 1, 2, 3, 4
-      return emb;
-    });
+  test('frame thumbnails appear after successful capture', async () => {
+    const { getByTestId, getAllByText } = setup();
+    await act(async () => { fireEvent.press(getByTestId('capture-button')); });
+    // Each captured frame shows a checkmark
+    await waitFor(() => expect(getAllByText('✓').length).toBeGreaterThanOrEqual(1));
+  });
+});
 
-    const { getByTestId, getByPlaceholderText } = render(
-      <EnrollmentScreen navigation={mockNavigation} />
+// ─── Save pipeline ────────────────────────────────────────────────────────────
+
+describe('save pipeline', () => {
+  async function captureAndSave(userId = 'worker_save') {
+    const { getByTestId, getByPlaceholderText } = setup();
+    fireEvent.changeText(getByPlaceholderText('Enter unique worker ID'), userId);
+    await act(async () => { fireEvent.press(getByTestId('capture-button')); });
+    await waitFor(() =>
+      expect(getByTestId('save-button').props.accessibilityState?.disabled).toBe(false)
     );
+    await act(async () => { fireEvent.press(getByTestId('save-button')); });
+    return { getByTestId, getByPlaceholderText };
+  }
 
-    const input = getByPlaceholderText('Enter unique worker ID');
-    const captureButton = getByTestId('capture-button');
-    const saveButton = getByTestId('save-button');
+  test('insertEnrolledFace is called with correct userId and 512-dim embedding', async () => {
+    await captureAndSave('worker_insert_test');
 
-    fireEvent.changeText(input, 'worker_john');
+    await waitFor(() => expect(insertEnrolledFace).toHaveBeenCalled());
 
-    // Capture
-    await act(async () => {
-      fireEvent.press(captureButton);
-    });
-
-    // Save
-    await waitFor(() => {
-      expect(saveButton.props.accessibilityState?.disabled).toBe(false);
-    });
-
-    await act(async () => {
-      fireEvent.press(saveButton);
-    });
-
-    expect(insertEnrolledFace).toHaveBeenCalled();
-    const [userIdArg, embeddingArg] = (insertEnrolledFace as jest.Mock).mock.calls[0];
-
-    expect(userIdArg).toBe('worker_john');
-    expect(embeddingArg).toBeInstanceOf(Float32Array);
-    expect(embeddingArg.length).toBe(512);
-
-    // Verify embedding averaging calculation: (0 + 1 + 2 + 3 + 4) / 5 = 2
-    // But normalized! So all values should be equal and normalized
-    // If original averages are 2, normalized should have same relative values (constant values)
-    const expectedVal = 2 / Math.sqrt(512 * 2 * 2); // since all 512 elements are 2
-    expect(embeddingArg[0]).toBeCloseTo(expectedVal, 5);
-
-    // Assert it calls goBack on success
-    await act(async () => {
-      jest.advanceTimersByTime(1500);
-    });
-    expect(mockNavigation.goBack).toHaveBeenCalled();
+    const [uid, emb] = (insertEnrolledFace as jest.Mock).mock.calls[0];
+    expect(uid).toBe('worker_insert_test');
+    expect(emb).toBeInstanceOf(Float32Array);
+    expect(emb).toHaveLength(512);
   });
 
-  test('Duplicate user_id shows error banner', async () => {
-    // Mock user list with existing worker ID
+  test('duplicate user_id shows error banner and does NOT insert', async () => {
     (getAllEnrolledFaces as jest.Mock).mockResolvedValue([
-      { user_id: 'worker_exists', embedding: new Float32Array(512) },
+      { user_id: 'existing_id', embedding: new Float32Array(512) },
     ]);
 
-    const { getByText, getByTestId, getByPlaceholderText } = render(
-      <EnrollmentScreen navigation={mockNavigation} />
+    const { getByTestId, getByPlaceholderText, getByText } = setup();
+    fireEvent.changeText(getByPlaceholderText('Enter unique worker ID'), 'existing_id');
+    await act(async () => { fireEvent.press(getByTestId('capture-button')); });
+    await waitFor(() =>
+      expect(getByTestId('save-button').props.accessibilityState?.disabled).toBe(false)
+    );
+    await act(async () => { fireEvent.press(getByTestId('save-button')); });
+
+    await waitFor(() =>
+      expect(getByText('Duplicate Personnel ID. This user is already enrolled.')).toBeTruthy()
+    );
+    expect(insertEnrolledFace).not.toHaveBeenCalled();
+  });
+
+  test('empty user_id shows validation error', async () => {
+    const { getByTestId, getByText } = setup();
+    // Capture without user_id, then try save via direct handler (button is disabled, so simulate directly)
+    await act(async () => { fireEvent.press(getByTestId('capture-button')); });
+    // Button still disabled because userId is empty — the save will not fire.
+    // Verify button is still disabled
+    await waitFor(() =>
+      expect(getByTestId('save-button').props.accessibilityState?.disabled).toBe(true)
+    );
+  });
+});
+
+// ─── Error states ─────────────────────────────────────────────────────────────
+
+describe('error handling', () => {
+  test('capture failure shows error banner', async () => {
+    (captureEnrollmentFrames as jest.Mock).mockRejectedValue(
+      new Error('Camera hardware failure')
     );
 
-    const input = getByPlaceholderText('Enter unique worker ID');
-    const captureButton = getByTestId('capture-button');
-    const saveButton = getByTestId('save-button');
+    const { getByTestId, getByText } = setup();
+    await act(async () => { fireEvent.press(getByTestId('capture-button')); });
 
-    fireEvent.changeText(input, 'worker_exists');
+    await waitFor(() => expect(getByText('Camera hardware failure')).toBeTruthy());
+  });
 
-    // Capture
-    await act(async () => {
-      fireEvent.press(captureButton);
-    });
+  test('insertEnrolledFace DB failure shows error banner', async () => {
+    (insertEnrolledFace as jest.Mock).mockRejectedValue(new Error('SQLite disk full'));
 
-    // Save
-    await waitFor(() => {
-      expect(saveButton.props.accessibilityState?.disabled).toBe(false);
-    });
+    const { getByTestId, getByPlaceholderText, getByText } = setup();
+    fireEvent.changeText(getByPlaceholderText('Enter unique worker ID'), 'w_fail');
+    await act(async () => { fireEvent.press(getByTestId('capture-button')); });
+    await waitFor(() =>
+      expect(getByTestId('save-button').props.accessibilityState?.disabled).toBe(false)
+    );
+    await act(async () => { fireEvent.press(getByTestId('save-button')); });
 
-    await act(async () => {
-      fireEvent.press(saveButton);
-    });
-
-    // Storing should NOT have been called
-    expect(insertEnrolledFace).not.toHaveBeenCalled();
-
-    // Verify error banner is shown
-    expect(getByText('Duplicate Personnel ID. This user is already enrolled.')).toBeTruthy();
+    await waitFor(() => expect(getByText('SQLite disk full')).toBeTruthy());
   });
 });

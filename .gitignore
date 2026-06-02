@@ -53,3 +53,28 @@ coverage/
 *.swp
 *.swo
 *~
+
+# Local context and reference files
+context.txt
+hackathon_doc7.pdf
+
+# SQLite database files
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+*.sqlite
+
+# Python compiled and virtualenv files
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.venv/
+venv/
+env/
+ENV/
+
+# Windows system files
+Thumbs.db
+desktop.ini

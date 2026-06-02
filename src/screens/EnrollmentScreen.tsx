@@ -511,7 +511,7 @@ const styles = StyleSheet.create({
     borderColor: '#1a237e',
   },
   stepNumber: {
-    color: '#212121',
+    color: '#ffffff',
     fontWeight: 'bold',
     fontSize: 14,
   },

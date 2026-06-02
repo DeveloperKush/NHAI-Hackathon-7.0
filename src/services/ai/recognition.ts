@@ -268,10 +268,18 @@ let cachedDeviceId: string | null = null;
 
 /**
  * Generates a stable device ID using expo-constants or a stable UUID fallback.
+ * Note: Constants.installationId was removed in Expo SDK 50. We use the EAS projectId
+ * or fall back to a per-install UUID stored in a module-level cache.
  */
 export function generateDeviceId(): string {
-  if (Constants && Constants.installationId) {
-    return Constants.installationId;
+  // Prefer any stable identifier from expo-constants
+  const stableId =
+    (Constants as any).installationId ||
+    Constants.expoConfig?.extra?.eas?.projectId ||
+    (Constants as any).manifest?.extra?.eas?.projectId;
+
+  if (stableId) {
+    return stableId;
   }
 
   if (cachedDeviceId) {

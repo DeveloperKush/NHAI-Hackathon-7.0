@@ -1,284 +1,295 @@
+/**
+ * @file liveness.test.ts
+ * Unit tests for the liveness detection math functions and LivenessEngine state machine.
+ * All tests are pure JS — no native modules required.
+ */
+
 import {
   calculateEAR,
   calculateMAR,
-  calculateSmileScore,
   calculateHeadYaw,
   checkDepthConsistency,
   getPromptForState,
   LivenessEngine,
-  Landmark
+  Landmark,
 } from '../src/services/ai/liveness';
 import { Challenge } from '../src/constants/liveness';
 
-// Helper to create a base mock landmark list (455+ elements)
-function createMockLandmarks(options?: {
-  flatPhoto?: boolean;
-  eyeState?: 'open' | 'closed';
-  lipsState?: 'normal' | 'smile';
-  headState?: 'center' | 'turn';
+// ─── Landmark factory helpers ────────────────────────────────────────────────
+
+/** Build a minimal 460-landmark array with controllable eye/lip/head/depth state. */
+function makeLandmarks(opts: {
+  eyes?: 'open' | 'closed';
+  lips?: 'neutral' | 'wide';
+  head?: 'center' | 'turned';
+  depth?: 'real' | 'flat';
 }): Landmark[] {
-  const landmarks: Landmark[] = [];
-  const flat = options?.flatPhoto ?? false;
+  const { eyes = 'open', lips = 'neutral', head = 'center', depth = 'real' } = opts;
 
-  // Initialize all landmarks with some base coordinate values
-  for (let i = 0; i < 460; i++) {
-    landmarks.push({
-      x: 0.5,
-      y: 0.5,
-      // If flatPhoto, z is exactly 0. If normal, give it some depth variance
-      z: flat ? 0.0 : (i % 10) * 0.005
-    });
-  }
+  // Seed with normalized coords.
+  // 'real': assign a sinusoidal z depth profile so σ(z) > 0.001 threshold.
+  // 'flat': all z = 0 so σ(z) = 0, which fails checkDepthConsistency.
+  const lm: Landmark[] = Array.from({ length: 460 }, (_, i) => ({
+    x: 0.5,
+    y: 0.5,
+    z: depth === 'real' ? Math.sin(i * 0.15) * 0.05 : 0, // real: σ≈0.035, flat: σ=0
+  }));
 
-  // Left Eye indices: 33, 160, 158, 133, 153, 144
-  // Right Eye indices: 362, 385, 387, 263, 380, 373
-  const eyeState = options?.eyeState ?? 'open';
-  if (eyeState === 'open') {
-    // Left eye open
-    landmarks[33] = { x: 0.20, y: 0.40, z: 0.01 }; // p1
-    landmarks[160] = { x: 0.22, y: 0.38, z: 0.01 }; // p2
-    landmarks[158] = { x: 0.24, y: 0.38, z: 0.01 }; // p3
-    landmarks[133] = { x: 0.26, y: 0.40, z: 0.01 }; // p4
-    landmarks[153] = { x: 0.24, y: 0.42, z: 0.01 }; // p5
-    landmarks[144] = { x: 0.22, y: 0.42, z: 0.01 }; // p6
+  // ── Eyes ──────────────────────────────────────
+  // Left eye: [33, 160, 158, 133, 153, 144]
+  // Right eye: [362, 385, 387, 263, 380, 373]
+  const zVal = depth === 'real' ? 0.01 : 0;
+  const eyeV = eyes === 'open' ? 0.02 : 0; // vertical separation
+  const setEye = (indices: number[], cx: number, cy: number) => {
+    lm[indices[0]] = { x: cx,        y: cy,          z: zVal };
+    lm[indices[1]] = { x: cx + 0.02, y: cy - eyeV,   z: zVal };
+    lm[indices[2]] = { x: cx + 0.04, y: cy - eyeV,   z: zVal };
+    lm[indices[3]] = { x: cx + 0.06, y: cy,           z: zVal };
+    lm[indices[4]] = { x: cx + 0.04, y: cy + eyeV,   z: zVal };
+    lm[indices[5]] = { x: cx + 0.02, y: cy + eyeV,   z: zVal };
+  };
+  setEye([33, 160, 158, 133, 153, 144],   0.20, 0.40);
+  setEye([362, 385, 387, 263, 380, 373], 0.70, 0.40);
 
-    // Right eye open
-    landmarks[362] = { x: 0.70, y: 0.40, z: 0.01 }; // p1
-    landmarks[385] = { x: 0.72, y: 0.38, z: 0.01 }; // p2
-    landmarks[387] = { x: 0.74, y: 0.38, z: 0.01 }; // p3
-    landmarks[263] = { x: 0.76, y: 0.40, z: 0.01 }; // p4
-    landmarks[380] = { x: 0.74, y: 0.42, z: 0.01 }; // p5
-    landmarks[373] = { x: 0.72, y: 0.42, z: 0.01 }; // p6
-  } else {
-    // Closed eyes (blink) - vertical distances are extremely small
-    landmarks[33] = { x: 0.20, y: 0.40, z: 0.01 };
-    landmarks[160] = { x: 0.22, y: 0.40, z: 0.01 }; // same y as corners
-    landmarks[158] = { x: 0.24, y: 0.40, z: 0.01 };
-    landmarks[133] = { x: 0.26, y: 0.40, z: 0.01 };
-    landmarks[153] = { x: 0.24, y: 0.40, z: 0.01 };
-    landmarks[144] = { x: 0.22, y: 0.40, z: 0.01 };
+  // ── Lips ──────────────────────────────────────
+  const lipV = lips === 'wide' ? 0.10 : 0.02;
+  lm[61]  = { x: 0.40, y: 0.60, z: zVal };
+  lm[291] = { x: 0.60, y: 0.60, z: zVal };
+  lm[13]  = { x: 0.50, y: 0.60 - lipV, z: zVal };
+  lm[14]  = { x: 0.50, y: 0.60 + lipV, z: zVal };
 
-    landmarks[362] = { x: 0.70, y: 0.40, z: 0.01 };
-    landmarks[385] = { x: 0.72, y: 0.40, z: 0.01 };
-    landmarks[387] = { x: 0.74, y: 0.40, z: 0.01 };
-    landmarks[263] = { x: 0.76, y: 0.40, z: 0.01 };
-    landmarks[380] = { x: 0.74, y: 0.40, z: 0.01 };
-    landmarks[373] = { x: 0.72, y: 0.40, z: 0.01 };
-  }
+  // ── Head yaw ──────────────────────────────────
+  const noseX = head === 'center' ? 0.50 : 0.30;
+  lm[1]   = { x: noseX, y: 0.50, z: zVal };
+  lm[234] = { x: 0.20,  y: 0.50, z: zVal };
+  lm[454] = { x: 0.80,  y: 0.50, z: zVal };
 
-  // Lips indices: 61, 291, 13, 14
-  const lipsState = options?.lipsState ?? 'normal';
-  if (lipsState === 'normal') {
-    landmarks[61] = { x: 0.40, y: 0.60, z: 0.02 };  // left corner
-    landmarks[291] = { x: 0.60, y: 0.60, z: 0.02 }; // right corner
-    landmarks[13] = { x: 0.50, y: 0.58, z: 0.02 };  // top center
-    landmarks[14] = { x: 0.50, y: 0.62, z: 0.02 };  // bottom center
-  } else {
-    // Smile (mouth opened/stretched vertically)
-    landmarks[61] = { x: 0.40, y: 0.60, z: 0.02 };
-    landmarks[291] = { x: 0.60, y: 0.60, z: 0.02 };
-    landmarks[13] = { x: 0.50, y: 0.50, z: 0.02 }; // top moved up
-    landmarks[14] = { x: 0.50, y: 0.70, z: 0.02 }; // bottom moved down
-  }
+  // Smile helpers needed by calculateSmileScore (152=chin, 10=forehead)
+  lm[152] = { x: 0.50, y: 0.90, z: zVal };
+  lm[10]  = { x: 0.50, y: 0.10, z: zVal };
 
-  // Head turn landmarks: nose=1, leftCheek=234, rightCheek=454
-  const headState = options?.headState ?? 'center';
-  if (headState === 'center') {
-    landmarks[1] = { x: 0.50, y: 0.50, z: 0.03 };   // nose in the middle of cheeks
-    landmarks[234] = { x: 0.20, y: 0.50, z: 0.01 }; // left cheek
-    landmarks[454] = { x: 0.80, y: 0.50, z: 0.01 }; // right cheek
-  } else {
-    // Turned head (asymmetry nose closer to left cheek)
-    landmarks[1] = { x: 0.30, y: 0.50, z: 0.03 }; // nose moved left
-    landmarks[234] = { x: 0.20, y: 0.50, z: 0.01 };
-    landmarks[454] = { x: 0.80, y: 0.50, z: 0.01 };
-  }
-
-  // Force all z coordinates to 0 if flatPhoto is true to ensure 0 variance/stdDev
-  if (flat) {
-    for (const landmark of landmarks) {
-      landmark.z = 0;
-    }
-  }
-
-  return landmarks;
+  return lm;
 }
 
-describe('Liveness Math Function Tests', () => {
-  test('calculateEAR correctly computes eye aspect ratio', () => {
-    const landmarksOpen = createMockLandmarks({ eyeState: 'open' });
-    const leftEyeOpen = [33, 160, 158, 133, 153, 144].map(idx => landmarksOpen[idx]);
-    const rightEyeOpen = [362, 385, 387, 263, 380, 373].map(idx => landmarksOpen[idx]);
+// ─── Pure math tests ─────────────────────────────────────────────────────────
 
-    const earOpen = calculateEAR(leftEyeOpen, rightEyeOpen);
-    expect(earOpen).toBeGreaterThan(0.2);
-
-    const landmarksClosed = createMockLandmarks({ eyeState: 'closed' });
-    const leftEyeClosed = [33, 160, 158, 133, 153, 144].map(idx => landmarksClosed[idx]);
-    const rightEyeClosed = [362, 385, 387, 263, 380, 373].map(idx => landmarksClosed[idx]);
-
-    const earClosed = calculateEAR(leftEyeClosed, rightEyeClosed);
-    expect(earClosed).toBeLessThan(0.1);
+describe('calculateEAR', () => {
+  test('returns > 0.2 for open eyes', () => {
+    const lm = makeLandmarks({ eyes: 'open' });
+    const leftEye  = [33, 160, 158, 133, 153, 144].map(i => lm[i]);
+    const rightEye = [362, 385, 387, 263, 380, 373].map(i => lm[i]);
+    expect(calculateEAR(leftEye, rightEye)).toBeGreaterThan(0.2);
   });
 
-  test('calculateMAR correctly computes mouth aspect ratio', () => {
-    const landmarksNormal = createMockLandmarks({ lipsState: 'normal' });
-    const lipsNormal = [61, 291, 13, 14].map(idx => landmarksNormal[idx]);
-    const marNormal = calculateMAR(lipsNormal);
-    // |0.58 - 0.62| / |0.40 - 0.60| = 0.04 / 0.20 = 0.2
-    expect(marNormal).toBeCloseTo(0.2, 3);
-
-    const landmarksSmile = createMockLandmarks({ lipsState: 'smile' });
-    const lipsSmile = [61, 291, 13, 14].map(idx => landmarksSmile[idx]);
-    const marSmile = calculateMAR(lipsSmile);
-    // |0.50 - 0.70| / |0.40 - 0.60| = 0.20 / 0.20 = 1.0
-    expect(marSmile).toBeCloseTo(1.0, 3);
+  test('returns 0 for closed eyes (blink)', () => {
+    const lm = makeLandmarks({ eyes: 'closed' });
+    const leftEye  = [33, 160, 158, 133, 153, 144].map(i => lm[i]);
+    const rightEye = [362, 385, 387, 263, 380, 373].map(i => lm[i]);
+    expect(calculateEAR(leftEye, rightEye)).toBe(0);
   });
 
-  test('calculateSmileScore computes simulated smile score correctly in tests', () => {
-    const landmarksNormal = createMockLandmarks({ lipsState: 'normal' });
-    const lipsNormal = [61, 291, 13, 14].map(idx => landmarksNormal[idx]);
-    const scoreNormal = calculateSmileScore(landmarksNormal, lipsNormal);
-    // Under IS_TEST, should return marNormal * 0.5 = 0.2 * 0.5 = 0.1
-    expect(scoreNormal).toBeCloseTo(0.1, 3);
-
-    const landmarksSmile = createMockLandmarks({ lipsState: 'smile' });
-    const lipsSmile = [61, 291, 13, 14].map(idx => landmarksSmile[idx]);
-    const scoreSmile = calculateSmileScore(landmarksSmile, lipsSmile);
-    // Under IS_TEST, should return marSmile * 0.5 = 1.0 * 0.5 = 0.5
-    expect(scoreSmile).toBeCloseTo(0.5, 3);
-  });
-
-  test('calculateHeadYaw correctly computes head yaw asymmetry', () => {
-    const landmarksCenter = createMockLandmarks({ headState: 'center' });
-    const yawCenter = calculateHeadYaw(
-      landmarksCenter[1],
-      landmarksCenter[234],
-      landmarksCenter[454]
-    );
-    expect(yawCenter).toBeCloseTo(0.0, 5);
-
-    const landmarksTurn = createMockLandmarks({ headState: 'turn' });
-    const yawTurn = calculateHeadYaw(
-      landmarksTurn[1],
-      landmarksTurn[234],
-      landmarksTurn[454]
-    );
-    // dLeft = |0.30 - 0.20| = 0.1
-    // dRight = |0.30 - 0.80| = 0.5
-    // yaw = (0.1 - 0.5) / 0.6 = -0.4 / 0.6 = -0.666
-    expect(Math.abs(yawTurn)).toBeCloseTo(0.6667, 3);
-  });
-
-  test('checkDepthConsistency flags flat photos', () => {
-    const flatLandmarks = createMockLandmarks({ flatPhoto: true });
-    expect(checkDepthConsistency(flatLandmarks)).toBe(false);
-
-    const realLandmarks = createMockLandmarks({ flatPhoto: false });
-    expect(checkDepthConsistency(realLandmarks)).toBe(true);
+  test('returns 0 when eye arrays are too short', () => {
+    expect(calculateEAR([], [])).toBe(0);
+    expect(calculateEAR([{ x: 0, y: 0, z: 0 }], [{ x: 0, y: 0, z: 0 }])).toBe(0);
   });
 });
 
-describe('LivenessEngine State Machine Tests', () => {
-  beforeEach(() => {
-    jest.useFakeTimers();
+describe('calculateMAR', () => {
+  test('returns low ratio for neutral lips (~0.2)', () => {
+    const lm = makeLandmarks({ lips: 'neutral' });
+    const lips = [61, 291, 13, 14].map(i => lm[i]);
+    // vertical = 2*0.02 = 0.04, horizontal = 0.20 → MAR = 0.04/0.20 = 0.2
+    expect(calculateMAR(lips)).toBeCloseTo(0.2, 2);
   });
 
-  afterEach(() => {
-    jest.useRealTimers();
+  test('returns high ratio for wide-open mouth (>=1.0)', () => {
+    const lm = makeLandmarks({ lips: 'wide' });
+    const lips = [61, 291, 13, 14].map(i => lm[i]);
+    // vertical = 2*0.10 = 0.20, horizontal = 0.20 → MAR = 1.0
+    expect(calculateMAR(lips)).toBeCloseTo(1.0, 2);
   });
 
-  test('getPromptForState returns correct prompt strings', () => {
-    expect(getPromptForState('READY')).toBe('Face camera');
-    expect(getPromptForState('WAITING_BLINK')).toBe('Please blink');
-    expect(getPromptForState('WAITING_SMILE')).toBe('Please smile');
-    expect(getPromptForState('WAITING_HEAD_TURN')).toBe('Turn head slightly');
-    expect(getPromptForState('PASSED')).toBeNull();
-    expect(getPromptForState('FAILED')).toBe('Timeout — Please try again');
+  test('returns 0 when fewer than 4 landmarks provided', () => {
+    expect(calculateMAR([{ x: 0, y: 0, z: 0 }])).toBe(0);
+  });
+});
+
+describe('calculateHeadYaw', () => {
+  test('returns ~0 for centered head', () => {
+    const lm = makeLandmarks({ head: 'center' });
+    // nose=0.50, leftCheek=0.20, rightCheek=0.80
+    // dLeft=0.30, dRight=0.30 → yaw=0
+    expect(calculateHeadYaw(lm[1], lm[234], lm[454])).toBeCloseTo(0, 5);
   });
 
-  test('Transitions from READY through challenges to PASSED', () => {
-    const engine = new LivenessEngine(2);
-    const challenges = engine.getChallenges();
-    expect(challenges.length).toBe(2);
-    expect(engine.getState()).toBe('READY');
+  test('returns significant asymmetry for turned head', () => {
+    const lm = makeLandmarks({ head: 'turned' });
+    // nose=0.30, leftCheek=0.20, rightCheek=0.80
+    // dLeft=0.10, dRight=0.50 → yaw=(0.10-0.50)/0.60 = -0.667
+    const yaw = calculateHeadYaw(lm[1], lm[234], lm[454]);
+    expect(Math.abs(yaw)).toBeCloseTo(0.667, 2);
+  });
 
-    const normalFrame = createMockLandmarks({
-      eyeState: 'open',
-      lipsState: 'normal',
-      headState: 'center',
-      flatPhoto: false
-    });
+  test('returns 0 when both distances are zero', () => {
+    const p: Landmark = { x: 0.5, y: 0.5, z: 0 };
+    expect(calculateHeadYaw(p, p, p)).toBe(0);
+  });
+});
 
-    // Send first frame to transition from READY to the first challenge
-    let res = engine.processFrame(normalFrame);
-    const firstChallenge = challenges[0];
-    const expectedFirstState = `WAITING_${firstChallenge}`;
-    expect(res.state).toBe(expectedFirstState);
+describe('checkDepthConsistency', () => {
+  test('passes for real 3D face (z variance > threshold)', () => {
+    const lm = makeLandmarks({ depth: 'real' });
+    expect(checkDepthConsistency(lm)).toBe(true);
+  });
 
-    // Resolve first challenge
-    // Let's create custom frames to satisfy whatever the first challenge is
-    if (firstChallenge === Challenge.BLINK) {
-      const blinkFrame = createMockLandmarks({ eyeState: 'closed' });
-      // Blink requires 1 frame
-      res = engine.processFrame(blinkFrame);
-    } else if (firstChallenge === Challenge.SMILE) {
-      const smileFrame = createMockLandmarks({ lipsState: 'smile' });
-      res = engine.processFrame(smileFrame);
-    } else {
-      const turnFrame = createMockLandmarks({ headState: 'turn' });
-      res = engine.processFrame(turnFrame);
+  test('fails for flat photo (all z = 0)', () => {
+    const lm = makeLandmarks({ depth: 'flat' });
+    expect(checkDepthConsistency(lm)).toBe(false);
+  });
+
+  test('fails for empty landmark array', () => {
+    expect(checkDepthConsistency([])).toBe(false);
+  });
+
+  test('uses custom threshold correctly', () => {
+    // Give real face but crank threshold up so it fails
+    const lm = makeLandmarks({ depth: 'real' });
+    expect(checkDepthConsistency(lm, 999)).toBe(false);
+    // Very low threshold → passes even on minimal variance
+    expect(checkDepthConsistency(lm, 0)).toBe(true);
+  });
+});
+
+describe('getPromptForState', () => {
+  const cases: [Parameters<typeof getPromptForState>[0], string | null][] = [
+    ['READY',            'Face camera'],
+    ['WAITING_BLINK',    'Please blink'],
+    ['WAITING_SMILE',    'Please smile'],
+    ['WAITING_HEAD_TURN','Turn head slightly'],
+    ['PASSED',           null],
+    ['FAILED',           'Timeout — Please try again'],
+  ];
+
+  test.each(cases)('state "%s" → "%s"', (state, expected) => {
+    expect(getPromptForState(state)).toBe(expected);
+  });
+});
+
+// ─── LivenessEngine state machine ────────────────────────────────────────────
+
+describe('LivenessEngine', () => {
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => jest.useRealTimers());
+
+  test('starts in READY state, getChallenges returns requested count', () => {
+    const eng = new LivenessEngine(2);
+    expect(eng.getState()).toBe('READY');
+    expect(eng.getChallenges()).toHaveLength(2);
+  });
+
+  test('READY → first challenge on first real-face frame', () => {
+    const eng = new LivenessEngine(1);
+    const lm = makeLandmarks({ depth: 'real' });
+    const { state } = eng.processFrame(lm);
+    expect(['WAITING_BLINK', 'WAITING_HEAD_TURN']).toContain(state);
+  });
+
+  test('flat photo fails immediately with FAILED state', () => {
+    const eng = new LivenessEngine(2);
+    const { state, prompt } = eng.processFrame(makeLandmarks({ depth: 'flat' }));
+    expect(state).toBe('FAILED');
+    expect(prompt).toBe('Timeout — Please try again');
+  });
+
+  test('PASSED is terminal — further frames do not change state', () => {
+    const eng = new LivenessEngine(1);
+    eng.forceChallengeDetected(); // skip challenge
+    expect(eng.getState()).toBe('PASSED');
+    const lm = makeLandmarks({ depth: 'real' });
+    const { state } = eng.processFrame(lm);
+    expect(state).toBe('PASSED');
+  });
+
+  test('FAILED is terminal — further frames do not change state', () => {
+    const eng = new LivenessEngine(1);
+    eng.processFrame(makeLandmarks({ depth: 'flat' })); // triggers FAILED
+    expect(eng.getState()).toBe('FAILED');
+    const { state } = eng.processFrame(makeLandmarks({ depth: 'real' }));
+    expect(state).toBe('FAILED');
+  });
+
+  test('times out after 10 s of no progress', () => {
+    const eng = new LivenessEngine(1);
+    // Enter a waiting state
+    eng.processFrame(makeLandmarks({ depth: 'real' }));
+    expect(eng.getState()).not.toBe('READY');
+    // Advance 11 s
+    jest.advanceTimersByTime(11_000);
+    const lm = makeLandmarks({ depth: 'real', eyes: 'open', head: 'center' });
+    const { state } = eng.processFrame(lm);
+    expect(state).toBe('FAILED');
+  });
+
+  test('checkTimeout returns true and sets FAILED when time exceeded', () => {
+    const eng = new LivenessEngine(1);
+    eng.processFrame(makeLandmarks({ depth: 'real' })); // enter WAITING_*
+    jest.advanceTimersByTime(11_000);
+    expect(eng.checkTimeout()).toBe(true);
+    expect(eng.getState()).toBe('FAILED');
+  });
+
+  test('BLINK challenge: passes after EAR drops below threshold', () => {
+    // Force engine to only have BLINK as the challenge
+    let blinkPassed = false;
+    for (let attempt = 0; attempt < 20 && !blinkPassed; attempt++) {
+      const eng = new LivenessEngine(1);
+      eng.processFrame(makeLandmarks({ depth: 'real' }));
+      if (eng.getState() !== 'WAITING_BLINK') continue;
+
+      // Send a closed-eye frame
+      const { state } = eng.processFrame(makeLandmarks({ eyes: 'closed', depth: 'real' }));
+      if (state === 'PASSED') blinkPassed = true;
     }
+    expect(blinkPassed).toBe(true);
+  });
 
-    // Now it should be in the second challenge state
-    const secondChallenge = challenges[1];
-    const expectedSecondState = `WAITING_${secondChallenge}`;
-    expect(res.state).toBe(expectedSecondState);
+  test('HEAD_TURN challenge: passes when yaw asymmetry exceeds threshold', () => {
+    let turnPassed = false;
+    for (let attempt = 0; attempt < 20 && !turnPassed; attempt++) {
+      const eng = new LivenessEngine(1);
+      eng.processFrame(makeLandmarks({ depth: 'real' }));
+      if (eng.getState() !== 'WAITING_HEAD_TURN') continue;
 
-    // Resolve second challenge
-    if (secondChallenge === Challenge.BLINK) {
-      const blinkFrame = createMockLandmarks({ eyeState: 'closed' });
-      res = engine.processFrame(blinkFrame);
-    } else if (secondChallenge === Challenge.SMILE) {
-      const smileFrame = createMockLandmarks({ lipsState: 'smile' });
-      res = engine.processFrame(smileFrame);
-    } else {
-      const turnFrame = createMockLandmarks({ headState: 'turn' });
-      res = engine.processFrame(turnFrame);
+      const { state } = eng.processFrame(makeLandmarks({ head: 'turned', depth: 'real' }));
+      if (state === 'PASSED') turnPassed = true;
     }
-
-    // Engine should now be PASSED
-    expect(res.state).toBe('PASSED');
-    expect(res.prompt).toBeNull();
+    expect(turnPassed).toBe(true);
   });
 
-  test('Detects flat photo spoof and fails immediately', () => {
-    const engine = new LivenessEngine(2);
-    const flatFrame = createMockLandmarks({ flatPhoto: true });
-
-    const res = engine.processFrame(flatFrame);
-    expect(res.state).toBe('FAILED');
-    expect(res.prompt).toBe('Timeout — Please try again');
+  test('forceChallengeDetected advances through all challenges to PASSED', () => {
+    const eng = new LivenessEngine(2);
+    eng.processFrame(makeLandmarks({ depth: 'real' })); // enter challenge 1
+    eng.forceChallengeDetected(); // complete challenge 1
+    eng.forceChallengeDetected(); // complete challenge 2 → PASSED
+    expect(eng.getState()).toBe('PASSED');
   });
 
-  test('Times out after 10 seconds of inactive challenge', () => {
-    const engine = new LivenessEngine(1);
-    const challenges = engine.getChallenges();
-    const normalFrame = createMockLandmarks({
-      eyeState: 'open',
-      lipsState: 'normal',
-      headState: 'center'
-    });
+  test('forceChallengeDetected is no-op when already in terminal state', () => {
+    const eng = new LivenessEngine(1);
+    eng.processFrame(makeLandmarks({ depth: 'flat' })); // → FAILED
+    expect(eng.getState()).toBe('FAILED');
+    // forceChallengeDetected should not escape the FAILED terminal
+    eng.forceChallengeDetected();
+    // State stays FAILED (the method checks for PASSED/FAILED at entry)
+    expect(eng.getState()).toBe('FAILED');
+  });
 
-    // Enter active state
-    let res = engine.processFrame(normalFrame);
-    expect(res.state).toBe(`WAITING_${challenges[0]}`);
+  test('insufficient landmarks (<455) does not advance state, calls checkTimeout', () => {
+    const eng = new LivenessEngine(1);
+    eng.processFrame(makeLandmarks({ depth: 'real' })); // enter WAITING_*
+    const initial = eng.getState();
 
-    // Advance timers by 11 seconds (11000ms)
-    jest.advanceTimersByTime(11000);
-
-    // Process another frame
-    res = engine.processFrame(normalFrame);
-    expect(res.state).toBe('FAILED');
+    const { state } = eng.processFrame([]); // empty → not enough landmarks
+    expect(state).toBe(initial); // state unchanged (no timeout yet)
   });
 });

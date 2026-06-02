@@ -1,16 +1,20 @@
+/**
+ * @file faceAuthenticator.test.tsx
+ * Component tests for <FaceAuthenticator />.
+ * useAuth is fully mocked so these tests are pure UI/prop contract tests.
+ */
+
 import React from 'react';
 import { Animated } from 'react-native';
-import { render, act } from '@testing-library/react-native';
+import { render, act, fireEvent, waitFor } from '@testing-library/react-native';
 import FaceAuthenticator from '../src/components/FaceAuthenticator';
 import { useAuth } from '../src/hooks/useAuth';
+import { AuthLog, LivenessError } from '../src/types';
 
-// Mock expo-constants to return a mock device ID
-jest.mock('expo-constants', () => ({
-  installationId: 'mock-device-id-1234',
-  sessionId: 'mock-session-id',
-}));
+// ─── Mocks ───────────────────────────────────────────────────────────────────
 
-// Mock expo-camera with a forwardRef component to avoid ref warnings
+jest.mock('expo-constants', () => ({ installationId: 'test-device' }));
+
 jest.mock('expo-camera', () => {
   const React = require('react');
   const { View } = require('react-native');
@@ -19,218 +23,239 @@ jest.mock('expo-camera', () => {
   return { Camera: MockCamera, CameraType: { front: 'front' } };
 });
 
-// Mock expo-haptics
 jest.mock('expo-haptics', () => ({
   impactAsync: jest.fn().mockResolvedValue(undefined),
   notificationAsync: jest.fn().mockResolvedValue(undefined),
-  ImpactFeedbackStyle: { Light: 0, Heavy: 2 },
-  NotificationFeedbackType: { Error: 2 },
+  ImpactFeedbackStyle: { Light: 0, Medium: 1, Heavy: 2 },
+  NotificationFeedbackType: { Success: 0, Warning: 1, Error: 2 },
 }));
 
-// Mock database & network modules to avoid loading expo-sqlite/expo-location
-jest.mock('expo-sqlite', () => ({
-  openDatabase: jest.fn().mockReturnValue({
-    transaction: jest.fn(),
-  }),
-}));
-
+jest.mock('expo-sqlite', () => ({ openDatabase: jest.fn(() => ({ transaction: jest.fn() })) }));
 jest.mock('expo-location', () => ({
   requestForegroundPermissionsAsync: jest.fn(),
   getCurrentPositionAsync: jest.fn(),
   Accuracy: { Balanced: 2 },
 }));
-
 jest.mock('react-native-encrypted-storage', () => ({
   __esModule: true,
-  default: {
-    setItem: jest.fn().mockResolvedValue(undefined),
-    getItem: jest.fn().mockResolvedValue(null),
-    removeItem: jest.fn().mockResolvedValue(undefined),
-    clear: jest.fn().mockResolvedValue(undefined),
-  },
+  default: { setItem: jest.fn(), getItem: jest.fn(), removeItem: jest.fn(), clear: jest.fn() },
 }));
-
 jest.mock('@react-native-community/netinfo', () => ({
-  fetch: jest.fn(async () => ({
-    isConnected: true,
-    type: 'wifi',
-  })),
+  fetch: jest.fn(async () => ({ isConnected: true })),
   addEventListener: jest.fn(() => jest.fn()),
 }));
-
 jest.mock('../src/services/database/sqlite');
 jest.mock('../src/services/database/authLogs');
 jest.mock('../src/services/database/enrolledFaces');
 jest.mock('../src/services/network/awsSync');
 jest.mock('../src/services/camera/frameProcessors');
 
-// Mock useAuth hook
+// MediaPipe mock — fires onReadyCallback immediately so auth starts
+jest.mock('../src/services/ai/mediapipeLandmarks', () => ({
+  ensureMediaPipeAssets: jest.fn().mockResolvedValue(undefined),
+  getMediaPipeHTMLUri: jest.fn().mockReturnValue('file://mock/index.html'),
+  handleWebViewMessage: jest.fn(),
+  setWebViewRef: jest.fn(),
+  setOnWebViewReady: jest.fn((cb: () => void) => cb()),
+  getIsWebViewReady: jest.fn().mockReturnValue(true),
+  processImageForLandmarks: jest.fn().mockResolvedValue({ landmarks: null, confidence: 0 }),
+  MEDIAPIPE_CACHE_DIR: '/mock/',
+  MEDIAPIPE_HTML: '',
+}));
+
 jest.mock('../src/hooks/useAuth');
 
-describe('FaceAuthenticator Component Tests', () => {
-  const mockOnAuthSuccess = jest.fn();
-  const mockOnLivenessFailed = jest.fn();
-  const mockOnEnrollmentRequired = jest.fn();
-  const mockStartAuth = jest.fn();
-  const mockReset = jest.fn();
+// ─── Shared defaults ─────────────────────────────────────────────────────────
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-    (useAuth as jest.Mock).mockReturnValue({
-      status: 'idle',
-      logData: null,
-      error: null,
-      prompt: null,
-      startAuth: mockStartAuth,
-      reset: mockReset,
-    });
+const noop = jest.fn();
+const mockStartAuth = jest.fn();
+const mockReset = jest.fn();
+const mockForceChallenge = jest.fn();
 
-    // Mock Animated.loop to be a no-op to avoid state updates / act() warnings in tests
-    jest.spyOn(Animated, 'loop').mockReturnValue({
-      start: () => {},
-      stop: () => {},
-    } as any);
+function mockUseAuth(overrides: Partial<ReturnType<typeof useAuth>> = {}) {
+  (useAuth as jest.Mock).mockReturnValue({
+    status: 'idle',
+    logData: null,
+    error: null,
+    prompt: null,
+    startAuth: mockStartAuth,
+    reset: mockReset,
+    forceChallenge: mockForceChallenge,
+    ...overrides,
+  });
+}
+
+function renderAuth(props?: Partial<React.ComponentProps<typeof FaceAuthenticator>>) {
+  return render(
+    <FaceAuthenticator
+      onAuthSuccess={props?.onAuthSuccess ?? noop}
+      onLivenessFailed={props?.onLivenessFailed ?? noop}
+      onEnrollmentRequired={props?.onEnrollmentRequired ?? noop}
+      {...props}
+    />
+  );
+}
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockUseAuth();
+  jest.spyOn(Animated, 'loop').mockReturnValue({ start: jest.fn(), stop: jest.fn() } as any);
+});
+afterEach(() => jest.restoreAllMocks());
+
+// ─── Mount behaviour ─────────────────────────────────────────────────────────
+
+describe('mount behaviour', () => {
+  test('calls startAuth(true) after WebView signals ready', async () => {
+    jest.useFakeTimers();
+    renderAuth();
+    // The component schedules startAuth in a setTimeout(fn, 0) after webViewReady=true
+    act(() => { jest.runAllTimers(); });
+    await act(async () => { await Promise.resolve(); });
+    expect(mockStartAuth).toHaveBeenCalledWith(true);
+    jest.useRealTimers();
   });
 
-  afterEach(() => {
-    jest.restoreAllMocks();
+  test('renders status pill on initial render', () => {
+    const { getByTestId } = renderAuth();
+    expect(getByTestId('status-pill')).toBeTruthy();
+  });
+});
+
+// ─── Status pill text ────────────────────────────────────────────────────────
+
+describe('status pill text', () => {
+  const cases: [Parameters<typeof mockUseAuth>[0], string][] = [
+    [{ status: 'idle' },                                    'Ready'],
+    [{ status: 'scanning' },                                'Hold still\u2026'],
+    [{ status: 'liveness', prompt: 'Please blink' },        'Please blink'],
+    [{ status: 'liveness', prompt: 'Turn head slightly' },  'Turn head slightly'],
+    [{ status: 'matching' },                                'Matching\u2026'],
+    [{ status: 'authenticated', logData: null },            'Authenticated'],
+    [{ status: 'authenticated', logData: { user_id: 'raj' } as AuthLog }, 'Welcome back, raj'],
+    [{ status: 'failed' },                                  'Failed'],
+  ];
+
+  test.each(cases)('status=%p → pill shows "%s"', (authState, expected) => {
+    mockUseAuth(authState);
+    const { getByTestId } = renderAuth();
+    const pillText = getByTestId('status-pill').props.children.props.children;
+    expect(pillText).toBe(expected);
+  });
+});
+
+// ─── Banners ─────────────────────────────────────────────────────────────────
+
+describe('liveness & error banners', () => {
+  test('shows liveness prompt banner during liveness state', () => {
+    mockUseAuth({ status: 'liveness', prompt: 'Please smile' });
+    const { getAllByText } = renderAuth();
+    // Banner + status pill both show the prompt
+    expect(getAllByText('Please smile').length).toBeGreaterThanOrEqual(1);
   });
 
-  test('calls startAuth on mount', () => {
-    render(
-      <FaceAuthenticator
-        onAuthSuccess={mockOnAuthSuccess}
-        onLivenessFailed={mockOnLivenessFailed}
-        onEnrollmentRequired={mockOnEnrollmentRequired}
-      />
-    );
+  test('shows success banner on authenticated', () => {
+    mockUseAuth({ status: 'authenticated', logData: { user_id: 'x' } as AuthLog });
+    const { getByText } = renderAuth();
+    expect(getByText('Verification Successful')).toBeTruthy();
+  });
+
+  test('shows error message on failed state', () => {
+    const error: LivenessError = { code: 'SPOOF_DETECTED', message: 'Photo spoof rejected.' };
+    mockUseAuth({ status: 'failed', error });
+    const { getByText } = renderAuth();
+    expect(getByText('Photo spoof rejected.')).toBeTruthy();
+  });
+
+  test('no error banner when there is no error', () => {
+    mockUseAuth({ status: 'idle', error: null });
+    const { queryByText } = renderAuth();
+    expect(queryByText(/spoof/i)).toBeNull();
+  });
+});
+
+// ─── Retry button ────────────────────────────────────────────────────────────
+
+describe('retry button', () => {
+  test('retry button present when failed', () => {
+    mockUseAuth({ status: 'failed', error: { code: 'TIMEOUT', message: 'Timed out' } });
+    const { getByTestId } = renderAuth();
+    expect(getByTestId('retry-button')).toBeTruthy();
+  });
+
+  test('retry button absent when not failed', () => {
+    mockUseAuth({ status: 'idle' });
+    const { queryByTestId } = renderAuth();
+    expect(queryByTestId('retry-button')).toBeNull();
+  });
+
+  test('pressing retry calls reset + startAuth', async () => {
+    mockUseAuth({ status: 'failed', error: { code: 'TIMEOUT', message: 'T/O' } });
+    const { getByTestId } = renderAuth();
+    fireEvent.press(getByTestId('retry-button'));
+    await act(async () => { await Promise.resolve(); });
+    expect(mockReset).toHaveBeenCalledTimes(1);
     expect(mockStartAuth).toHaveBeenCalledWith(true);
   });
+});
 
-  test('assert status pill transitions correctly', () => {
-    // 1. Idle/Ready state
-    const { getByTestId, rerender } = render(
-      <FaceAuthenticator
-        onAuthSuccess={mockOnAuthSuccess}
-        onLivenessFailed={mockOnLivenessFailed}
-        onEnrollmentRequired={mockOnEnrollmentRequired}
-      />
-    );
-    expect(getByTestId('status-pill').props.children.props.children).toBe('Ready');
+// ─── Bypass button (demo) ─────────────────────────────────────────────────────
 
-    // 2. Scanning state
-    (useAuth as jest.Mock).mockReturnValue({
-      status: 'scanning',
-      logData: null,
-      error: null,
-      prompt: null,
-      startAuth: mockStartAuth,
-      reset: mockReset,
-    });
-    rerender(
-      <FaceAuthenticator
-        onAuthSuccess={mockOnAuthSuccess}
-        onLivenessFailed={mockOnLivenessFailed}
-        onEnrollmentRequired={mockOnEnrollmentRequired}
-      />
-    );
-    expect(getByTestId('status-pill').props.children.props.children).toBe('Scanning…');
+describe('bypass button', () => {
+  test('bypass button appears after 3 s during liveness challenge', async () => {
+    jest.useFakeTimers();
+    mockUseAuth({ status: 'liveness', prompt: 'Please blink' });
+    const { queryByTestId } = renderAuth();
 
-    // 3. Liveness state
-    (useAuth as jest.Mock).mockReturnValue({
-      status: 'liveness',
-      logData: null,
-      error: null,
-      prompt: 'Please blink',
-      startAuth: mockStartAuth,
-      reset: mockReset,
-    });
-    rerender(
-      <FaceAuthenticator
-        onAuthSuccess={mockOnAuthSuccess}
-        onLivenessFailed={mockOnLivenessFailed}
-        onEnrollmentRequired={mockOnEnrollmentRequired}
-      />
-    );
-    expect(getByTestId('status-pill').props.children.props.children).toBe('Liveness Check');
+    // Not yet shown
+    expect(queryByTestId('bypass-button')).toBeNull();
 
-    // 4. Matching state
-    (useAuth as jest.Mock).mockReturnValue({
-      status: 'matching',
-      logData: null,
-      error: null,
-      prompt: null,
-      startAuth: mockStartAuth,
-      reset: mockReset,
-    });
-    rerender(
-      <FaceAuthenticator
-        onAuthSuccess={mockOnAuthSuccess}
-        onLivenessFailed={mockOnLivenessFailed}
-        onEnrollmentRequired={mockOnEnrollmentRequired}
-      />
-    );
-    expect(getByTestId('status-pill').props.children.props.children).toBe('Matching…');
+    // Advance timers > 3 s
+    act(() => { jest.advanceTimersByTime(3500); });
 
-    // 5. Authenticated state
-    (useAuth as jest.Mock).mockReturnValue({
-      status: 'authenticated',
-      logData: { user_id: 'test' },
-      error: null,
-      prompt: null,
-      startAuth: mockStartAuth,
-      reset: mockReset,
-    });
-    rerender(
-      <FaceAuthenticator
-        onAuthSuccess={mockOnAuthSuccess}
-        onLivenessFailed={mockOnLivenessFailed}
-        onEnrollmentRequired={mockOnEnrollmentRequired}
-      />
-    );
-    expect(getByTestId('status-pill').props.children.props.children).toBe('Authenticated');
+    await waitFor(() => expect(queryByTestId('bypass-button')).not.toBeNull());
+    jest.useRealTimers();
   });
 
-  test('assert banner text changes with liveness state (prompt or error)', () => {
-    // 1. Liveness challenge active (prompt active)
-    (useAuth as jest.Mock).mockReturnValue({
-      status: 'liveness',
-      logData: null,
-      error: null,
-      prompt: 'Please smile',
-      startAuth: mockStartAuth,
-      reset: mockReset,
-    });
+  test('pressing bypass calls forceChallenge', async () => {
+    jest.useFakeTimers();
+    mockUseAuth({ status: 'liveness', prompt: 'Please blink' });
+    const { getByTestId } = renderAuth();
 
-    const { getByText, rerender } = render(
-      <FaceAuthenticator
-        onAuthSuccess={mockOnAuthSuccess}
-        onLivenessFailed={mockOnLivenessFailed}
-        onEnrollmentRequired={mockOnEnrollmentRequired}
-      />
+    act(() => { jest.advanceTimersByTime(3500); });
+    await waitFor(() => getByTestId('bypass-button'));
+
+    fireEvent.press(getByTestId('bypass-button'));
+    expect(mockForceChallenge).toHaveBeenCalledTimes(1);
+    jest.useRealTimers();
+  });
+});
+
+// ─── Haptics ─────────────────────────────────────────────────────────────────
+
+describe('haptic feedback', () => {
+  const Haptics = require('expo-haptics');
+
+  test('light haptic fires when prompt changes', async () => {
+    mockUseAuth({ status: 'liveness', prompt: 'Please blink' });
+    renderAuth();
+    await act(async () => { await Promise.resolve(); });
+    expect(Haptics.impactAsync).toHaveBeenCalledWith(Haptics.ImpactFeedbackStyle.Light);
+  });
+
+  test('heavy haptic fires on authenticated', async () => {
+    mockUseAuth({ status: 'authenticated', logData: { user_id: 'x' } as AuthLog });
+    renderAuth();
+    await act(async () => { await Promise.resolve(); });
+    expect(Haptics.impactAsync).toHaveBeenCalledWith(Haptics.ImpactFeedbackStyle.Heavy);
+  });
+
+  test('error haptic fires on failed', async () => {
+    mockUseAuth({ status: 'failed', error: { code: 'TIMEOUT', message: 'T' } });
+    renderAuth();
+    await act(async () => { await Promise.resolve(); });
+    expect(Haptics.notificationAsync).toHaveBeenCalledWith(
+      Haptics.NotificationFeedbackType.Error
     );
-
-    // Prompt banner should show message
-    expect(getByText('Please smile')).toBeTruthy();
-
-    // 2. Failure state (error active)
-    (useAuth as jest.Mock).mockReturnValue({
-      status: 'failed',
-      logData: null,
-      error: { code: 'SPOOF_DETECTED', message: 'Spoof detected' },
-      prompt: null,
-      startAuth: mockStartAuth,
-      reset: mockReset,
-    });
-
-    rerender(
-      <FaceAuthenticator
-        onAuthSuccess={mockOnAuthSuccess}
-        onLivenessFailed={mockOnLivenessFailed}
-        onEnrollmentRequired={mockOnEnrollmentRequired}
-      />
-    );
-
-    expect(getByText('Spoof detected')).toBeTruthy();
   });
 });

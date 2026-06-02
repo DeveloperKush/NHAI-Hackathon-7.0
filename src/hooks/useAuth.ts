@@ -181,10 +181,11 @@ export function useAuth(cameraRef: any, options?: UseAuthOptions) {
         }
 
         let embeddingBypass: Float32Array;
+        let bypassBase64 = '';
         try {
-          const authBase64 = await captureRecognitionBase64(cameraRef?.current ?? {});
-          lastFrameBase64 = authBase64;
-          embeddingBypass = await extractEmbeddingForAuth(cameraRef?.current ?? null, authBase64);
+          bypassBase64 = await captureRecognitionBase64(cameraRef?.current ?? {});
+          lastFrameBase64 = bypassBase64;
+          embeddingBypass = await extractEmbeddingForAuth(cameraRef?.current ?? null, bypassBase64);
         } catch (err: unknown) {
           console.error('Embedding extraction failed:', err);
           const extractError: LivenessError = {
@@ -237,7 +238,7 @@ export function useAuth(cameraRef: any, options?: UseAuthOptions) {
             gps_lng,
             device_id: generateDeviceId(),
             similarity_score: bestMatchBypass.score,
-            photo_thumb: lastFrameBase64 || authBase64,
+            photo_thumb: lastFrameBase64 || bypassBase64,
           };
           await insertAuthLog(authenticatedLog);
           if (isMountedRef.current) setLogData(authenticatedLog);
@@ -342,15 +343,14 @@ export function useAuth(cameraRef: any, options?: UseAuthOptions) {
         }
 
         // Fallback for mock test environment (Jest)
-        const IS_TEST = typeof (global as any).jest !== 'undefined' || process.env.NODE_ENV === 'test';
-        if (!base64 && IS_TEST) {
+        if (!base64 && IS_TEST_ENV) {
           base64 = 'mock_base64_data';
         }
 
         // 2. Decode and extract landmarks only every 3rd frame (300ms)
         if ((frameCount === 1 || frameCount % 3 === 0) && base64) {
           let landmarks: any = null;
-          if (IS_TEST) {
+          if (IS_TEST_ENV) {
             const lastPic = cameraRef.current?._lastPicture;
             const mockFrame = {
               isBlinking: lastPic && 'isBlinking' in lastPic ? lastPic.isBlinking : true,
@@ -468,7 +468,7 @@ export function useAuth(cameraRef: any, options?: UseAuthOptions) {
 
         // Sleep to maintain ~100ms camera capture rate
         const elapsed = Date.now() - loopStartTime;
-        const sleepTime = IS_TEST ? 0 : Math.max(10, 100 - elapsed);
+        const sleepTime = IS_TEST_ENV ? 0 : Math.max(10, 100 - elapsed);
         await new Promise((resolve) => setTimeout(resolve, sleepTime));
       }
 
@@ -495,8 +495,7 @@ export function useAuth(cameraRef: any, options?: UseAuthOptions) {
       }
 
       // Check model load status
-      const IS_TEST = typeof (global as any).jest !== 'undefined' || process.env.NODE_ENV === 'test';
-      if (!IS_TEST) {
+      if (!IS_TEST_ENV) {
         const modelStatus = getModelStatus();
         if (modelStatus.error || !modelStatus.loaded) {
           const loadError: LivenessError = {
@@ -518,7 +517,7 @@ export function useAuth(cameraRef: any, options?: UseAuthOptions) {
       // Extract embedding — 2-shot average for stability (no 14s CLAHE path)
       let embedding: Float32Array;
       try {
-        if (IS_TEST) {
+        if (IS_TEST_ENV) {
           const mockFrame = {
             uri: 'mock_uri',
             width: 112,
