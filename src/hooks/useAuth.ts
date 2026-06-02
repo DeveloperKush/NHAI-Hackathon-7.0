@@ -54,15 +54,18 @@ async function extractEmbeddingForAuth(
 async function extractAveragedEmbeddingForAuth(
   cameraRef: { takePictureAsync?: (opts: object) => Promise<{ base64?: string }> } | null
 ): Promise<{ embedding: Float32Array; lastBase64: string }> {
-  // HACKATHON: 2-shot average reduces false rejects near threshold.
+  // HACKATHON: 3-shot average improves stability vs lighting/pose jitter.
   const b1 = await captureRecognitionBase64(cameraRef ?? {});
-  await new Promise((r) => setTimeout(r, 200));
+  await new Promise((r) => setTimeout(r, 180));
   const b2 = await captureRecognitionBase64(cameraRef ?? {});
+  await new Promise((r) => setTimeout(r, 180));
+  const b3 = await captureRecognitionBase64(cameraRef ?? {});
 
   const e1 = await extractEmbeddingForAuth(cameraRef, b1);
   const e2 = await extractEmbeddingForAuth(cameraRef, b2);
+  const e3 = await extractEmbeddingForAuth(cameraRef, b3);
 
-  return { embedding: averageEmbeddings([e1, e2]), lastBase64: b2 };
+  return { embedding: averageEmbeddings([e1, e2, e3]), lastBase64: b3 };
 }
 
 function preprocessRecognitionBase64SyncForTest(base64: string) {

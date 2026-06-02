@@ -1,6 +1,7 @@
 import { fastPreprocessFromBase64WithStats, type PreprocessStats } from './imagePreProc';
 import { MIN_PREPROCESS_VARIANCE } from '../constants/config';
 import type { Landmark } from '../services/ai/liveness';
+import { checkFrameQuality } from './imagePreProc';
 
 export const RECOGNITION_INPUT_SIZE = 112;
 
@@ -98,10 +99,40 @@ export async function captureRecognitionBase64(cameraRef: {
   throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
+/**
+ * HACKATHON: capture a frame and auto-retry until quality gates pass.
+ * Biggest ROI for accuracy without new native modules.
+ */
+export async function captureRecognitionBase64WithQuality(cameraRef: {
+  takePictureAsync?: (opts: object) => Promise<{ uri?: string; base64?: string }>;
+}): Promise<string> {
+  // In tests, keep deterministic behavior.
+  if (IS_TEST) {
+    return captureRecognitionBase64(cameraRef);
+  }
+
+  const { processImageForLandmarks } = await import('../services/ai/mediapipeLandmarks');
+
+  let lastReason = 'unknown';
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const base64 = await captureRecognitionBase64(cameraRef);
+    const lm = await processImageForLandmarks(base64);
+    const gate = checkFrameQuality(base64, lm);
+    if (gate.passed) {
+      return base64;
+    }
+    lastReason = gate.reason || 'quality gate failed';
+    // Small pause so user can adjust pose/lighting
+    await new Promise((r) => setTimeout(r, 250));
+  }
+
+  throw new Error(`Low quality frame: ${lastReason}`);
+}
+
 export async function captureAndPreprocessRecognition(cameraRef: {
   takePictureAsync?: (opts: object) => Promise<{ uri?: string; base64?: string }>;
 }): Promise<PreprocessStats> {
-  const base64 = await captureRecognitionBase64(cameraRef);
+  const base64 = await captureRecognitionBase64WithQuality(cameraRef);
   return preprocessRecognitionWithFaceGate(base64);
 }
 
