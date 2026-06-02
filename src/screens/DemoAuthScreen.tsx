@@ -7,16 +7,17 @@ import {
   TouchableOpacity,
   SafeAreaView,
   ActivityIndicator,
-  FlatList,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import FaceAuthenticator from '../components/FaceAuthenticator';
 import LivenessFeedback from '../components/LivenessFeedback';
 import { AuthLog, LivenessError } from '../types';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
-import { syncAuthLogs } from '../services/network/awsSync';
+import { syncAuthLogs, getUnsyncedCount, triggerSyncOnConnect } from '../services/network/awsSync';
 import { executeSql } from '../services/database/sqlite';
 import { useFocusEffect } from '@react-navigation/native';
 import { useIsFocused } from '@react-navigation/native';
+import { DEMO_MODE, LAST_SYNC_STORAGE_KEY } from '../constants/config';
 
 export interface DemoAuthScreenProps {
   navigation: any;
@@ -25,37 +26,59 @@ export interface DemoAuthScreenProps {
 export default function DemoAuthScreen({ navigation }: DemoAuthScreenProps) {
   const { isConnected } = useNetworkStatus();
   const isFocused = useIsFocused();
-  
+
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastType, setToastType] = useState<'success' | 'error' | 'warning'>('success');
   const [activeLog, setActiveLog] = useState<AuthLog | null>(null);
   const [recentLogs, setRecentLogs] = useState<AuthLog[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [refreshKey, setRefreshKey] = useState(0); // Trigger to reload camera on retry
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  // Remount camera when returning from EnrollmentScreen (fixes blank preview on Android).
+  // Sync status state
+  const [unsyncedCount, setUnsyncedCount] = useState(0);
+  const [lastSyncTs, setLastSyncTs] = useState<string | null>(null);
+  // 'idle' | 'syncing' | 'success' | 'failed'
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'failed'>('idle');
+
+  // Remount camera when returning from EnrollmentScreen (fixes blank preview on Android)
   useFocusEffect(
     useCallback(() => {
       setRefreshKey((k) => k + 1);
+      refreshSyncStatus();
       return () => {};
     }, [])
   );
 
-  // Fetch the last 5 auth logs from SQLite
+  // Auto-sync on connect
+  useEffect(() => {
+    const unsub = triggerSyncOnConnect();
+    return unsub;
+  }, []);
+
+  const refreshSyncStatus = async () => {
+    const count = await getUnsyncedCount();
+    setUnsyncedCount(count);
+    try {
+      const ts = await AsyncStorage.getItem(LAST_SYNC_STORAGE_KEY);
+      setLastSyncTs(ts);
+    } catch {
+      // ignore
+    }
+  };
+
+  useEffect(() => {
+    refreshSyncStatus();
+    fetchRecentLogs();
+  }, []);
+
   const fetchRecentLogs = async () => {
     try {
       const result = await executeSql(
         `SELECT 
-          log_id, 
-          user_id, 
-          timestamp, 
-          gps_lat, 
-          gps_lng, 
-          device_id, 
-          similarity_score, 
-          photo_thumb 
-        FROM auth_logs 
-        ORDER BY timestamp DESC 
+          log_id, user_id, timestamp, gps_lat, gps_lng,
+          device_id, similarity_score, photo_thumb
+        FROM auth_logs
+        ORDER BY timestamp DESC
         LIMIT 5`
       );
       const logs: AuthLog[] = [];
@@ -68,15 +91,12 @@ export default function DemoAuthScreen({ navigation }: DemoAuthScreenProps) {
     }
   };
 
-  useEffect(() => {
-    fetchRecentLogs();
-  }, []);
-
   const handleAuthSuccess = async (log: AuthLog) => {
     setToastType('success');
     setToastMessage(`Authenticated: ${log.user_id}`);
     setActiveLog(log);
     await fetchRecentLogs();
+    await refreshSyncStatus();
   };
 
   const handleLivenessFailed = (err: LivenessError) => {
@@ -92,19 +112,23 @@ export default function DemoAuthScreen({ navigation }: DemoAuthScreenProps) {
   };
 
   const handleSyncNow = async () => {
-    if (!isConnected) return;
     setIsSyncing(true);
+    setSyncStatus('syncing');
     try {
       const success = await syncAuthLogs();
       if (success) {
+        setSyncStatus('success');
         setToastType('success');
         setToastMessage('Synchronization complete!');
       } else {
+        setSyncStatus('failed');
         setToastType('error');
-        setToastMessage('Sync failed. Please check network status.');
+        setToastMessage('Sync failed. Check network status.');
       }
       await fetchRecentLogs();
+      await refreshSyncStatus();
     } catch (err: any) {
+      setSyncStatus('failed');
       setToastType('error');
       setToastMessage(err.message || 'Error occurred during sync.');
     } finally {
@@ -120,21 +144,42 @@ export default function DemoAuthScreen({ navigation }: DemoAuthScreenProps) {
       setToastMessage('Database cleared successfully!');
       setActiveLog(null);
       await fetchRecentLogs();
+      await refreshSyncStatus();
     } catch (err: any) {
       setToastType('error');
       setToastMessage('Failed to clear database: ' + err.message);
     }
   };
 
-  // Helper to format timestamps
   const formatTime = (isoString: string) => {
     try {
-      const date = new Date(isoString);
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      return new Date(isoString).toLocaleTimeString([], {
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+      });
     } catch {
       return isoString;
     }
   };
+
+  // Human-readable sync status label
+  const syncStatusLabel = (() => {
+    if (syncStatus === 'syncing') return 'Syncing...';
+    if (!isConnected) {
+      return unsyncedCount > 0
+        ? `Pending: ${unsyncedCount} log${unsyncedCount > 1 ? 's' : ''} (offline)`
+        : 'Offline';
+    }
+    if (syncStatus === 'failed') return `Failed — will retry on reconnect`;
+    if (unsyncedCount === 0) return 'Synced';
+    return `Pending: ${unsyncedCount} log${unsyncedCount > 1 ? 's' : ''}`;
+  })();
+
+  const syncStatusColor = (() => {
+    if (syncStatus === 'syncing') return '#ff9800';
+    if (syncStatus === 'failed') return '#f44336';
+    if (unsyncedCount === 0) return '#4caf50';
+    return '#ff9800';
+  })();
 
   return (
     <SafeAreaView style={styles.container}>
@@ -150,7 +195,38 @@ export default function DemoAuthScreen({ navigation }: DemoAuthScreenProps) {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContainer}>
-        {/* Camera container with fixed height */}
+        {/* Sync Status Badge */}
+        <View style={styles.syncStatusCard}>
+          <View style={styles.syncStatusRow}>
+            <View style={[styles.syncDot, { backgroundColor: syncStatusColor }]} />
+            <Text style={[styles.syncStatusText, { color: syncStatusColor }]}>
+              {syncStatusLabel}
+            </Text>
+            {/* HACKATHON: always show Sync Now so judges can trigger manually */}
+            <TouchableOpacity
+              style={[
+                styles.syncNowPill,
+                (isSyncing || !isConnected) && styles.syncNowPillDisabled,
+              ]}
+              onPress={handleSyncNow}
+              disabled={isSyncing || !isConnected}
+              testID="sync-button"
+            >
+              {isSyncing ? (
+                <ActivityIndicator size="small" color="#ffffff" />
+              ) : (
+                <Text style={styles.syncNowPillText}>Sync Now</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+          {lastSyncTs && (
+            <Text style={styles.lastSyncText}>
+              Last sync: {formatTime(lastSyncTs)}
+            </Text>
+          )}
+        </View>
+
+        {/* Camera */}
         <View style={styles.cameraContainer}>
           {isFocused ? (
             <FaceAuthenticator
@@ -164,50 +240,43 @@ export default function DemoAuthScreen({ navigation }: DemoAuthScreenProps) {
           )}
         </View>
 
-        {/* Detailed Card for the Active Authentication Log */}
+        {/* Active Auth Result Card */}
         {activeLog && (
           <View style={styles.activeLogCard} testID="active-log-card">
-            <Text style={styles.cardTitle}>Success Details</Text>
+            <Text style={styles.cardTitle}>
+              {/* HACKATHON: success animation via green border + title color */}
+              ✓ Authenticated
+            </Text>
             <View style={styles.cardRow}>
-              <Text style={styles.cardLabel}>User ID:</Text>
+              <Text style={styles.cardLabel}>User ID</Text>
               <Text style={styles.cardValue}>{activeLog.user_id}</Text>
             </View>
             <View style={styles.cardRow}>
-              <Text style={styles.cardLabel}>Time:</Text>
+              <Text style={styles.cardLabel}>Time</Text>
               <Text style={styles.cardValue}>{formatTime(activeLog.timestamp)}</Text>
             </View>
             <View style={styles.cardRow}>
-              <Text style={styles.cardLabel}>GPS Coordinates:</Text>
+              <Text style={styles.cardLabel}>GPS</Text>
               <Text style={styles.cardValue}>
-                {activeLog.gps_lat !== null && activeLog.gps_lng !== null
+                {activeLog.gps_lat != null && activeLog.gps_lng != null
                   ? `${activeLog.gps_lat.toFixed(4)}, ${activeLog.gps_lng.toFixed(4)}`
                   : 'N/A'}
               </Text>
             </View>
-            <View style={styles.cardRow}>
-              <Text style={styles.cardLabel}>Similarity Score:</Text>
-              <Text style={styles.cardValue}>{(activeLog.similarity_score * 100).toFixed(1)}%</Text>
-            </View>
+            {/* HACKATHON: show similarity score when DEMO_MODE — builds judge confidence */}
+            {DEMO_MODE && (
+              <View style={styles.cardRow}>
+                <Text style={styles.cardLabel}>Similarity Score</Text>
+                <Text style={[styles.cardValue, styles.scoreValue]}>
+                  {(activeLog.similarity_score * 100).toFixed(1)}%
+                </Text>
+              </View>
+            )}
           </View>
         )}
 
-        {/* Sync Controls */}
+        {/* Controls */}
         <View style={styles.controlsContainer}>
-          {isConnected && (
-            <TouchableOpacity
-              style={[styles.syncButton, isSyncing && styles.disabledButton]}
-              onPress={handleSyncNow}
-              disabled={isSyncing}
-              testID="sync-button"
-            >
-              {isSyncing ? (
-                <ActivityIndicator size="small" color="#ffffff" />
-              ) : (
-                <Text style={styles.syncButtonText}>Sync Now</Text>
-              )}
-            </TouchableOpacity>
-          )}
-
           <TouchableOpacity
             style={styles.clearDbButton}
             onPress={handleClearDatabase}
@@ -217,7 +286,7 @@ export default function DemoAuthScreen({ navigation }: DemoAuthScreenProps) {
           </TouchableOpacity>
         </View>
 
-        {/* Recent Authentication Logs List */}
+        {/* Recent Logs */}
         <View style={styles.logsSection}>
           <Text style={styles.sectionTitle}>Recent Logs (SQLite)</Text>
           <View style={styles.logsListContainer}>
@@ -228,9 +297,14 @@ export default function DemoAuthScreen({ navigation }: DemoAuthScreenProps) {
                   <Text style={styles.logTime}>{formatTime(log.timestamp)}</Text>
                 </View>
                 <View style={styles.logItemBody}>
-                  <Text style={styles.logDetails}>Score: {(log.similarity_score * 100).toFixed(1)}%</Text>
+                  {DEMO_MODE && (
+                    <Text style={styles.logDetails}>
+                      Score: {(log.similarity_score * 100).toFixed(1)}%
+                    </Text>
+                  )}
                   <Text style={styles.logDetails}>
-                    GPS: {log.gps_lat !== null && log.gps_lng !== null
+                    GPS:{' '}
+                    {log.gps_lat != null && log.gps_lng != null
                       ? `${log.gps_lat.toFixed(4)}, ${log.gps_lng.toFixed(4)}`
                       : 'N/A'}
                   </Text>
@@ -244,7 +318,6 @@ export default function DemoAuthScreen({ navigation }: DemoAuthScreenProps) {
         </View>
       </ScrollView>
 
-      {/* Floating Toast Feedbacks */}
       {toastMessage && (
         <LivenessFeedback
           message={toastMessage}
@@ -274,7 +347,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1a237e', // Primary Navy
+    color: '#1a237e',
   },
   enrollButton: {
     backgroundColor: '#1a237e',
@@ -292,6 +365,53 @@ const styles = StyleSheet.create({
     gap: 16,
     paddingBottom: 40,
   },
+  // Sync status badge card
+  syncStatusCard: {
+    backgroundColor: '#f5f5f5',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  syncStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  syncDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  syncStatusText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  syncNowPill: {
+    backgroundColor: '#1a237e',
+    paddingVertical: 5,
+    paddingHorizontal: 14,
+    borderRadius: 16,
+    minWidth: 80,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  syncNowPillDisabled: {
+    backgroundColor: '#9e9e9e',
+  },
+  syncNowPillText: {
+    color: '#ffffff',
+    fontWeight: 'bold',
+    fontSize: 12,
+  },
+  lastSyncText: {
+    fontSize: 11,
+    color: '#757575',
+    marginLeft: 18,
+  },
   cameraContainer: {
     width: '100%',
     aspectRatio: 3 / 4,
@@ -305,11 +425,11 @@ const styles = StyleSheet.create({
     shadowRadius: 2.62,
   },
   activeLogCard: {
-    backgroundColor: '#f5f5f5', // Surface grey
+    backgroundColor: '#f5f5f5',
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#4caf50', // Success green border
+    borderColor: '#4caf50',
     gap: 8,
   },
   cardTitle: {
@@ -333,26 +453,15 @@ const styles = StyleSheet.create({
     color: '#212121',
     fontWeight: 'bold',
   },
-  syncButton: {
-    backgroundColor: '#1a237e',
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  syncButtonText: {
-    color: '#ffffff',
-    fontWeight: 'bold',
+  scoreValue: {
+    color: '#1a237e',
     fontSize: 16,
-  },
-  disabledButton: {
-    backgroundColor: '#757575',
   },
   controlsContainer: {
     gap: 12,
   },
   clearDbButton: {
-    backgroundColor: '#f44336', // Warning red
+    backgroundColor: '#f44336',
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: 'center',

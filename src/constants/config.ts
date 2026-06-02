@@ -33,6 +33,12 @@ export const REQUIRED_CHALLENGES = 2;
 
 export const AWS_SYNC_URL = process.env.EXPO_PUBLIC_AWS_SYNC_URL;
 
+// HACKATHON: flip to false before production deploy
+export const DEMO_MODE = true;
+
+// AsyncStorage key for persisting last successful sync timestamp
+export const LAST_SYNC_STORAGE_KEY = '@nhai_last_sync_ts';
+
 export const MODEL_PATHS = {
   mobilefacenet: 'assets/models/ghostfacenet_fixed_int8.tflite',
 };

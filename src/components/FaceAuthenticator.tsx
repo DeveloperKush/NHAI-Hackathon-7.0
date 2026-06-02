@@ -8,7 +8,7 @@ import LivenessFeedback from './LivenessFeedback';
 import {
   setOnWebViewReady,
 } from '../services/ai/mediapipeLandmarks';
-import { SIMILARITY_THRESHOLD } from '../constants/config';
+import { SIMILARITY_THRESHOLD, DEMO_MODE } from '../constants/config';
 
 export default function FaceAuthenticator({
   onAuthSuccess,
@@ -106,16 +106,17 @@ export default function FaceAuthenticator({
     }
   }, [status]);
 
-  // Map state to bottom status pill text
+  // Map state + liveness prompt to bottom status pill text
   let statusText = 'Ready';
   if (status === 'scanning') {
     statusText = 'Hold still…';
   } else if (status === 'liveness') {
-    statusText = 'Liveness Check';
+    // Show actual challenge instruction directly in the pill
+    statusText = prompt || 'Liveness Check';
   } else if (status === 'matching') {
     statusText = 'Matching…';
   } else if (status === 'authenticated') {
-    statusText = 'Authenticated';
+    statusText = logData ? `Welcome back, ${logData.user_id}` : 'Authenticated';
   } else if (status === 'failed') {
     statusText = 'Failed';
   }
@@ -152,6 +153,15 @@ export default function FaceAuthenticator({
             type="success"
             onDismiss={() => {}}
           />
+        )}
+
+        {/* HACKATHON: show similarity score for 3s on success when DEMO_MODE — builds judge confidence */}
+        {status === 'authenticated' && DEMO_MODE && logData && (
+          <View style={styles.scoreBanner} testID="score-banner">
+            <Text style={styles.scoreText}>
+              Match: {(logData.similarity_score * 100).toFixed(1)}%
+            </Text>
+          </View>
         )}
 
         {status === 'failed' && error && (
@@ -244,6 +254,26 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontWeight: 'bold',
     fontSize: 16,
+    textAlign: 'center',
+  },
+  // HACKATHON: DEMO_MODE score overlay shown below success banner
+  scoreBanner: {
+    position: 'absolute',
+    top: 130,
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(26, 35, 126, 0.85)',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 4,
+  },
+  scoreText: {
+    color: '#ffffff',
+    fontWeight: 'bold',
+    fontSize: 18,
     textAlign: 'center',
   },
   analyzingBanner: {

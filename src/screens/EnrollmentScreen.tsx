@@ -54,6 +54,8 @@ export default function EnrollmentScreen({ navigation }: EnrollmentScreenProps) 
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [isModelLoading, setIsModelLoading] = useState(true);
   const [processingProgress, setProcessingProgress] = useState<string | null>(null);
+  // HACKATHON: live frame counter shown on camera overlay during capture
+  const [captureFrameCount, setCaptureFrameCount] = useState(0);
 
   useEffect(() => {
     (async () => {
@@ -90,6 +92,7 @@ export default function EnrollmentScreen({ navigation }: EnrollmentScreenProps) 
     setSuccessMsg(null);
     setIsCapturing(true);
     setCapturedFrames([]);
+    setCaptureFrameCount(0);
     enrollmentLandmarksRef.current = [];
     setCurrentStep(1);
 
@@ -108,16 +111,28 @@ export default function EnrollmentScreen({ navigation }: EnrollmentScreenProps) 
     }
 
     // HACKATHON: rapid 3-frame capture — skip per-frame MediaPipe quality gate (~60s saved)
+    // Animate frame counter 0→1→2→3 with timed increments while capture runs in background
+    let frameIdx = 0;
+    const progressInterval = setInterval(() => {
+      frameIdx = Math.min(frameIdx + 1, 3);
+      setCaptureFrameCount(frameIdx);
+      setQualityStatus(`Capturing frame ${frameIdx}/3…`);
+      if (frameIdx >= 3) clearInterval(progressInterval);
+    }, 400);
+
     try {
-      setQualityStatus('Capturing 3 frames…');
       const frames = await captureEnrollmentFrames(cameraRef.current, 3);
+      clearInterval(progressInterval);
+      setCaptureFrameCount(3);
       setCapturedFrames(frames);
       enrollmentLandmarksRef.current = frames.map(() => null);
     } catch (err: unknown) {
+      clearInterval(progressInterval);
       const message = err instanceof Error ? err.message : 'Failed to capture frames.';
       setErrorMsg(message);
     } finally {
       setIsCapturing(false);
+      setCaptureFrameCount(0);
       setQualityStatus(null);
       setShowSkipQuality(false);
       skipQualityCheckRef.current = false;
@@ -322,7 +337,21 @@ export default function EnrollmentScreen({ navigation }: EnrollmentScreenProps) 
               {isCapturing && (
                 <View style={styles.loadingOverlay}>
                   <ActivityIndicator size="large" color="#ffffff" />
-                  <Text style={styles.loadingText}>{qualityStatus || 'Capturing 3 Frames…'}</Text>
+                  <Text style={styles.loadingText}>
+                    {qualityStatus || 'Capturing 3 Frames…'}
+                  </Text>
+                  {/* Frame progress bar */}
+                  <View style={styles.progressBarContainer}>
+                    <View
+                      style={[
+                        styles.progressBarFill,
+                        { width: `${Math.round((captureFrameCount / 3) * 100)}%` },
+                      ]}
+                    />
+                  </View>
+                  <Text style={styles.progressLabel}>
+                    Frame {captureFrameCount}/3
+                  </Text>
                   {showSkipQuality && (
                     <TouchableOpacity
                       style={styles.skipButton}
@@ -646,6 +675,25 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontWeight: 'bold',
     fontSize: 18,
+  },
+  progressBarContainer: {
+    width: '70%',
+    height: 6,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginTop: 8,
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: '#4caf50',
+    borderRadius: 3,
+  },
+  progressLabel: {
+    color: '#ffffff',
+    fontSize: 13,
+    marginTop: 4,
+    opacity: 0.85,
   },
   skipButton: {
     marginTop: 12,
