@@ -2,6 +2,8 @@ import { Challenge, EAR_THRESHOLD, HEAD_YAW_THRESHOLD } from '../../constants/li
 
 export type LivenessState = 'READY' | 'WAITING_BLINK' | 'WAITING_SMILE' | 'WAITING_HEAD_TURN' | 'PASSED' | 'FAILED';
 
+const IS_TEST = typeof (global as any).jest !== 'undefined' || process.env.NODE_ENV === 'test';
+
 export interface Landmark {
   x: number;
   y: number;
@@ -71,7 +73,6 @@ export function calculateSmileScore(
   landmarks: Landmark[],
   lips: Landmark[]
 ): number {
-  const IS_TEST = typeof (global as any).jest !== 'undefined' || process.env.NODE_ENV === 'test';
   if (IS_TEST) {
     // In Jest tests, simulate smile score using mouth aspect ratio (MAR)
     const left = lips[0] || landmarks[61];
@@ -258,12 +259,14 @@ export class LivenessEngine {
     const yaw = calculateHeadYaw(nose, leftCheek, rightCheek);
 
     // Debug log
-    console.log(
-      '[Liveness]',
-      this.state,
-      'EAR=' + ear.toFixed(3),
-      'yaw=' + yaw.toFixed(3)
-    );
+    if (!IS_TEST) {
+      console.log(
+        '[Liveness]',
+        this.state,
+        'EAR=' + ear.toFixed(3),
+        'yaw=' + yaw.toFixed(3)
+      );
+    }
 
     // Evaluate current challenge condition
     const currentChallenge = this.challenges[this.currentChallengeIndex];
