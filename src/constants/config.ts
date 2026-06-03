@@ -31,7 +31,7 @@ export const LIVENESS_TIMEOUT_MS = 15000;
 
 export const REQUIRED_CHALLENGES = 2;
 
-export const AWS_SYNC_URL = process.env.EXPO_PUBLIC_AWS_SYNC_URL;
+export const AWS_SYNC_URL = process.env.EXPO_PUBLIC_AWS_SYNC_URL || 'https://binary-brains-mock-aws.onrender.com/api/sync';
 
 // HACKATHON: flip to false before production deploy
 export const DEMO_MODE = true;

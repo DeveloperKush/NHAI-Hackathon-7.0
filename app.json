@@ -1,13 +1,17 @@
 {
   "expo": {
-    "name": "binary-brains-datalake",
+    "name": "Binary Brains Auth",
     "slug": "binary-brains-datalake",
     "version": "1.0.0",
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "assetBundlePatterns": [
-      "**/*"
-    ],
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1a237e"
+    },
+    "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.binarybrains.datalake",
@@ -18,18 +22,12 @@
       }
     },
     "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1a237e"
+      },
       "package": "com.binarybrains.datalake",
-      "permissions": [
-        "CAMERA",
-        "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION",
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE"
-      ]
-    },
-    "plugins": [
-      "expo-camera",
-      "expo-location"
-    ]
+      "versionCode": 1
+    }
   }
 }
