@@ -38,11 +38,16 @@ export function executeSql(sql: string, params: any[] = []): Promise<SQLResult> 
   });
 }
 
+let initPromise: Promise<void> | null = null;
+
 /**
  * Initialize all required SQLite tables.
  */
 export function initializeDatabase(): Promise<void> {
-  return new Promise((resolve, reject) => {
+  if (initPromise) {
+    return initPromise;
+  }
+  initPromise = new Promise((resolve, reject) => {
     db.transaction(
       (tx) => {
         tx.executeSql(
@@ -73,9 +78,11 @@ export function initializeDatabase(): Promise<void> {
           );`,
           [],
           () => {
+            initPromise = null;
             resolve();
           },
           (_, err) => {
+            initPromise = null;
             reject(err);
             return true;
           }
@@ -83,14 +90,17 @@ export function initializeDatabase(): Promise<void> {
       },
       (txError) => {
         console.error('Database initialization transaction failed:', txError);
+        initPromise = null;
         reject(txError);
       },
       () => {
         console.log('Database initialized successfully.');
+        initPromise = null;
         resolve();
       }
     );
   });
+  return initPromise;
 }
 
 // Keep initDatabase for backwards compatibility with tests
