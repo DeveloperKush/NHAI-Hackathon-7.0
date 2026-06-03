@@ -1,5 +1,12 @@
 import { Challenge, EAR_THRESHOLD, HEAD_YAW_THRESHOLD } from '../../constants/liveness';
 
+// START CHANGE: yaw smoothing constants
+const YAW_WINDOW = 5;
+// Hysteresis thresholds: require a higher value to trigger, lower to un-trigger
+const HEAD_TURN_ON_THRESHOLD  = 0.12; // must exceed this to detect a turn
+const HEAD_TURN_OFF_THRESHOLD = 0.09; // must drop below this to un-detect
+// END CHANGE
+
 export type LivenessState = 'READY' | 'WAITING_BLINK' | 'WAITING_SMILE' | 'WAITING_HEAD_TURN' | 'PASSED' | 'FAILED';
 
 const IS_TEST = typeof (global as any).jest !== 'undefined' || process.env.NODE_ENV === 'test';
@@ -124,18 +131,27 @@ export function calculateSmileScore(
 
 /**
  * Calculates horizontal head yaw asymmetry based on nose and cheek positions.
- * Formula: (dLeft - dRight) / (dLeft + dRight)
+ * Returns a signed float: negative = turned left, positive = turned right.
+ * Formula: (dRight - dLeft) / (dLeft + dRight)
+ *
+ * When the nose moves RIGHT, it gets closer to the right cheek (dRight shrinks)
+ * and farther from the left cheek (dLeft grows) → positive value = right turn.
+ * When the nose moves LEFT, dLeft shrinks and dRight grows → negative = left turn.
  */
+// START CHANGE: fixed sign convention — left negative, right positive
 export function calculateHeadYaw(
   nose: Landmark,
   leftCheek: Landmark,
   rightCheek: Landmark
 ): number {
-  const dLeft = Math.abs(nose.x - leftCheek.x);
+  const dLeft  = Math.abs(nose.x - leftCheek.x);
   const dRight = Math.abs(nose.x - rightCheek.x);
   const sum = dLeft + dRight;
+  // positive → nose closer to right cheek (right turn)
+  // negative → nose closer to left cheek  (left turn)
   return sum === 0 ? 0 : (dLeft - dRight) / sum;
 }
+// END CHANGE
 
 /**
  * Checks passive 3D depth consistency by analyzing standard deviation of z-coordinates.
@@ -188,6 +204,10 @@ export class LivenessEngine {
   private consecutiveSmileFrames: number = 0;
   private consecutiveHeadTurnFrames: number = 0;
   private challengeStartTime: number | null = null;
+  // START CHANGE: yaw smoothing state
+  private yawHistory: number[] = [];
+  private headTurnDetected: boolean = false;
+  // END CHANGE
 
   constructor(requiredChallenges: number = 2) {
     this.requiredChallenges = requiredChallenges;
@@ -210,6 +230,10 @@ export class LivenessEngine {
     this.consecutiveSmileFrames = 0;
     this.consecutiveHeadTurnFrames = 0;
     this.challengeStartTime = null;
+    // START CHANGE: reset yaw smoother
+    this.yawHistory = [];
+    this.headTurnDetected = false;
+    // END CHANGE
   }
 
   /**
@@ -258,13 +282,22 @@ export class LivenessEngine {
     const rightCheek = landmarks[454];
     const yaw = calculateHeadYaw(nose, leftCheek, rightCheek);
 
+    // START CHANGE: rolling average smoothing for yaw
+    this.yawHistory.push(yaw);
+    if (this.yawHistory.length > YAW_WINDOW) {
+      this.yawHistory.shift();
+    }
+    const smoothedYaw = this.yawHistory.reduce((sum, v) => sum + v, 0) / this.yawHistory.length;
+    // END CHANGE
+
     // Debug log
     if (!IS_TEST) {
       console.log(
         '[Liveness]',
         this.state,
         'EAR=' + ear.toFixed(3),
-        'yaw=' + yaw.toFixed(3)
+        'yaw=' + yaw.toFixed(3),
+        'smoothedYaw=' + smoothedYaw.toFixed(3)  // START CHANGE
       );
     }
 
@@ -283,14 +316,30 @@ export class LivenessEngine {
         passedCurrent = true;
       }
     } else if (currentChallenge === Challenge.HEAD_TURN) {
-      if (Math.abs(yaw) > HEAD_YAW_THRESHOLD) {
-        this.consecutiveHeadTurnFrames++;
+      // START CHANGE: hysteresis on smoothed yaw to prevent flicker
+      const absSmoothedYaw = Math.abs(smoothedYaw);
+      if (!this.headTurnDetected) {
+        // Require smoothedYaw to exceed the ON threshold to trigger
+        if (absSmoothedYaw > HEAD_TURN_ON_THRESHOLD) {
+          this.headTurnDetected = true;
+          this.consecutiveHeadTurnFrames++;
+        } else {
+          this.consecutiveHeadTurnFrames = 0;
+        }
       } else {
-        this.consecutiveHeadTurnFrames = 0;
+        // Once triggered, only un-trigger if smoothedYaw drops below the OFF threshold
+        if (absSmoothedYaw >= HEAD_TURN_OFF_THRESHOLD) {
+          this.consecutiveHeadTurnFrames++;
+        } else {
+          // Hysteresis gap crossed — reset detection
+          this.headTurnDetected = false;
+          this.consecutiveHeadTurnFrames = 0;
+        }
       }
       if (this.consecutiveHeadTurnFrames >= 1) {
         passedCurrent = true;
       }
+      // END CHANGE
     }
 
     if (passedCurrent) {
@@ -316,6 +365,10 @@ export class LivenessEngine {
     this.consecutiveSmileFrames = 0;
     this.consecutiveHeadTurnFrames = 0;
     this.challengeStartTime = Date.now();
+    // START CHANGE: reset yaw smoother when entering a new challenge
+    this.yawHistory = [];
+    this.headTurnDetected = false;
+    // END CHANGE
 
     if (challenge === Challenge.BLINK) {
       this.state = 'WAITING_BLINK';

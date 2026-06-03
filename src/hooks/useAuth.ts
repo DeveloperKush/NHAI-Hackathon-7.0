@@ -103,6 +103,9 @@ export function useAuth(cameraRef: any, options?: UseAuthOptions) {
   const [prompt, setPrompt] = useState<string | null>(null);
   const livenessEngineRef = useRef<LivenessEngine | null>(null);
   const lastCameraNotRunningLogAtRef = useRef<number>(0);
+  // START CHANGE: throttle UI prompt updates to avoid jitter
+  const lastPromptUpdateRef = useRef<number>(0);
+  // END CHANGE
 
   const statusRef = useRef<any>('idle');
   const isMountedRef = useRef<boolean>(true);
@@ -400,9 +403,16 @@ export function useAuth(cameraRef: any, options?: UseAuthOptions) {
             }
 
             const engineRes = livenessEngine.processFrame(landmarks);
+            // START CHANGE: throttle UI prompt — only update banner every 800ms.
+            // Internal engine state still advances every frame.
             if (isMountedRef.current) {
-              setPrompt(engineRes.prompt);
+              const now = Date.now();
+              if (now - lastPromptUpdateRef.current > 800) {
+                setPrompt(engineRes.prompt);
+                lastPromptUpdateRef.current = now;
+              }
             }
+            // END CHANGE
 
             if (engineRes.state === 'PASSED') {
               success = true;

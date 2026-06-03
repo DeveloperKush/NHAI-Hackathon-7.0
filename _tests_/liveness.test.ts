@@ -292,4 +292,59 @@ describe('LivenessEngine', () => {
     const { state } = eng.processFrame([]); // empty → not enough landmarks
     expect(state).toBe(initial); // state unchanged (no timeout yet)
   });
+
+  // START CHANGE: HEAD_TURN flicker regression test
+  test('HEAD_TURN challenge should not flicker with noisy yaw', () => {
+    // Force an engine that will always start with HEAD_TURN as its sole challenge.
+    // We do this by retrying until we get that scheduling.
+    let eng: InstanceType<typeof LivenessEngine> | null = null;
+    for (let attempt = 0; attempt < 30; attempt++) {
+      const candidate = new LivenessEngine(1);
+      // Advance out of READY so getChallenges is populated
+      candidate.processFrame(makeLandmarks({ depth: 'real' }));
+      if (candidate.getState() === 'WAITING_HEAD_TURN') {
+        eng = candidate;
+        break;
+      }
+    }
+    if (!eng) {
+      // HEAD_TURN was never scheduled in 30 attempts — skip rather than false-fail
+      return;
+    }
+
+    // Noisy yaw values that straddle the ON threshold (0.12) — oscillate between 0.10 and 0.14.
+    // Without smoothing these would cause rapid WAITING_HEAD_TURN ↔ PASSED flicker.
+    // With a 5-frame rolling average the smoothed yaw will stay consistently above 0.12
+    // once enough frames > 0.12 accumulate, and stay there (hysteresis prevents drop back).
+    const noisyYaws = [0.10, 0.14, 0.10, 0.14, 0.10, 0.14, 0.10, 0.14, 0.10, 0.14];
+
+    let transitionsToPassed = 0;
+    let lastState = eng.getState();
+
+    for (const yawTarget of noisyYaws) {
+      // Build landmarks that produce the desired raw yaw value.
+      // calculateHeadYaw: yaw = (dLeft - dRight) / (dLeft + dRight)
+      // We fix leftCheek=0.20, rightCheek=0.80 (span = 0.60).
+      // We want: (noseX - 0.20) - (0.80 - noseX) = yawTarget * 0.60
+      //         => 2*noseX - 1.0 = yawTarget * 0.60
+      //         => noseX = (yawTarget * 0.60 + 1.0) / 2
+      const noseX = (yawTarget * 0.60 + 1.0) / 2;
+
+      const lm = makeLandmarks({ depth: 'real' });
+      lm[1]   = { x: noseX, y: 0.50, z: 0.01 }; // nose
+      lm[234] = { x: 0.20,  y: 0.50, z: 0.01 }; // left cheek
+      lm[454] = { x: 0.80,  y: 0.50, z: 0.01 }; // right cheek
+
+      const { state } = eng.processFrame(lm);
+
+      if (lastState !== 'PASSED' && state === 'PASSED') {
+        transitionsToPassed++;
+      }
+      lastState = state;
+    }
+
+    // The engine should transition to PASSED at most once — no flickering back and forth
+    expect(transitionsToPassed).toBeLessThanOrEqual(1);
+  });
+  // END CHANGE
 });

@@ -27,6 +27,9 @@ let webViewRef: any = null;
 let pendingResolve: ((result: { landmarks: Landmark[] | null; confidence: number } | null) => void) | null = null;
 let isWebViewReady = false;
 let onReadyCallback: (() => void) | null = null;
+// START CHANGE: de-bounce flag to prevent stacking WebView JS injections
+let isProcessing = false;
+// END CHANGE
 
 /**
  * Register WebView reference for scripting.
@@ -37,6 +40,9 @@ export function setWebViewRef(ref: any) {
   webViewRef = ref;
   if (!ref) {
     isWebViewReady = false;
+    // START CHANGE: clear in-flight lock when WebView is unmounted
+    isProcessing = false;
+    // END CHANGE
   }
 }
 
@@ -130,6 +136,8 @@ async function writeMediaPipeHTML(): Promise<void> {
 
 /**
  * Sends image data to WebView for face mesh landmarks extraction.
+ * START CHANGE: drops frames while a previous injection is still in flight,
+ * preventing multiple blocking injectJavaScript calls from stacking up.
  */
 export function processImageForLandmarks(
   base64Jpeg: string
@@ -141,6 +149,13 @@ export function processImageForLandmarks(
       return;
     }
 
+    // Drop this frame if the WebView is still computing the previous one
+    if (isProcessing) {
+      resolve(null);
+      return;
+    }
+
+    isProcessing = true;
     pendingResolve = resolve;
 
     // Call window.processImage inside the WebView
@@ -149,6 +164,7 @@ export function processImageForLandmarks(
     webViewRef.injectJavaScript(jsCode);
   });
 }
+// END CHANGE
 
 /**
  * WebView message receiver. Matches the callback Promise.
@@ -164,6 +180,9 @@ export function handleWebViewMessage(event: any) {
         onReadyCallback = null;
       }
     } else if (data.type === 'landmarks') {
+      // START CHANGE: release the in-flight lock so the next frame can be processed
+      isProcessing = false;
+      // END CHANGE
       if (pendingResolve) {
         pendingResolve({
           landmarks: data.landmarks,
@@ -173,6 +192,9 @@ export function handleWebViewMessage(event: any) {
       }
     } else if (data.type === 'error') {
       console.error('WebView MediaPipe error:', data.message);
+      // START CHANGE: also release the lock on errors so the bridge doesn't deadlock
+      isProcessing = false;
+      // END CHANGE
       if (pendingResolve) {
         pendingResolve(null);
         pendingResolve = null;
