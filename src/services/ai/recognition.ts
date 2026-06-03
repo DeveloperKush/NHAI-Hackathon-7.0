@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import type { TensorflowModel } from 'react-native-fast-tflite';
 import Constants from 'expo-constants';
 import { cosineSimilarity, l2Normalize } from '../../utils/math';
@@ -42,9 +43,32 @@ export async function initRecognitionModel(): Promise<void> {
     if (!nativeLoadTensorflowModel) {
       throw new Error('react-native-fast-tflite is not available.');
     }
-    const modelSource = require('../../../assets/models/ghostfacenet_fixed_int8.tflite');
-    console.log('Model asset ID resolved to:', modelSource);
-    model = await nativeLoadTensorflowModel(modelSource, []);
+
+    let source: any;
+    if (Platform.OS === 'android' && !__DEV__) {
+      source = { url: 'file:///android_asset/models/ghostfacenet_fixed_int8.tflite' };
+      console.log('Android release mode: loading model directly from assets via', source.url);
+    } else {
+      const requireSource = require('../../../assets/models/ghostfacenet_fixed_int8.tflite');
+      console.log('Model asset require ID:', requireSource);
+      try {
+        console.log('Resolving model asset locally via expo-asset...');
+        const { Asset } = require('expo-asset');
+        const asset = Asset.fromModule(requireSource);
+        await asset.downloadAsync();
+        if (asset.localUri) {
+          source = { url: asset.localUri };
+          console.log('Model asset downloaded and resolved to local path:', source.url);
+        } else {
+          source = requireSource;
+        }
+      } catch (assetErr) {
+        console.warn('Failed to resolve asset locally via expo-asset, falling back to require source:', assetErr);
+        source = requireSource;
+      }
+    }
+
+    model = await nativeLoadTensorflowModel(source, 'default');
     console.log('TFLite face recognition model initialized successfully!');
   } catch (err: any) {
     console.error('Failed to load TFLite model:', err);
