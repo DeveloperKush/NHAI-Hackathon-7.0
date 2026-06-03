@@ -57,6 +57,14 @@ coverage/
 # Local context and reference files
 context.txt
 hackathon_doc7.pdf
+convert_beautiful.py
+Technical_Onboarding_Guide.md
+Technical_Onboarding_Guide.pdf
+hackathon_7_PRD_final v2.md
+App.js
+
+# Kiro AI workspace
+.kiro/
 
 # SQLite database files
 *.db

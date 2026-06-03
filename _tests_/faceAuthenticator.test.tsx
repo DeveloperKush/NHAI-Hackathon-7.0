@@ -70,7 +70,6 @@ jest.mock('../src/hooks/useAuth');
 const noop = jest.fn();
 const mockStartAuth = jest.fn();
 const mockReset = jest.fn();
-const mockForceChallenge = jest.fn();
 
 function mockUseAuth(overrides: Partial<ReturnType<typeof useAuth>> = {}) {
   (useAuth as jest.Mock).mockReturnValue({
@@ -80,7 +79,6 @@ function mockUseAuth(overrides: Partial<ReturnType<typeof useAuth>> = {}) {
     prompt: null,
     startAuth: mockStartAuth,
     reset: mockReset,
-    forceChallenge: mockForceChallenge,
     ...overrides,
   });
 }
@@ -199,37 +197,7 @@ describe('retry button', () => {
   });
 });
 
-// ─── Bypass button (demo) ─────────────────────────────────────────────────────
 
-describe('bypass button', () => {
-  test('bypass button appears after 3 s during liveness challenge', async () => {
-    jest.useFakeTimers();
-    mockUseAuth({ status: 'liveness', prompt: 'Please blink' });
-    const { queryByTestId } = renderAuth();
-
-    // Not yet shown
-    expect(queryByTestId('bypass-button')).toBeNull();
-
-    // Advance timers > 3 s
-    act(() => { jest.advanceTimersByTime(3500); });
-
-    await waitFor(() => expect(queryByTestId('bypass-button')).not.toBeNull());
-    jest.useRealTimers();
-  });
-
-  test('pressing bypass calls forceChallenge', async () => {
-    jest.useFakeTimers();
-    mockUseAuth({ status: 'liveness', prompt: 'Please blink' });
-    const { getByTestId } = renderAuth();
-
-    act(() => { jest.advanceTimersByTime(3500); });
-    await waitFor(() => getByTestId('bypass-button'));
-
-    fireEvent.press(getByTestId('bypass-button'));
-    expect(mockForceChallenge).toHaveBeenCalledTimes(1);
-    jest.useRealTimers();
-  });
-});
 
 // ─── Haptics ─────────────────────────────────────────────────────────────────
 

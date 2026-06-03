@@ -33,6 +33,7 @@ export default function DemoAuthScreen({ navigation }: DemoAuthScreenProps) {
   const [recentLogs, setRecentLogs] = useState<AuthLog[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [startTrigger, setStartTrigger] = useState(0);
 
   // Sync status state
   const [unsyncedCount, setUnsyncedCount] = useState(0);
@@ -44,6 +45,7 @@ export default function DemoAuthScreen({ navigation }: DemoAuthScreenProps) {
   useFocusEffect(
     useCallback(() => {
       setRefreshKey((k) => k + 1);
+      setStartTrigger(0);
       refreshSyncStatus();
       return () => {};
     }, [])
@@ -136,19 +138,10 @@ export default function DemoAuthScreen({ navigation }: DemoAuthScreenProps) {
     }
   };
 
-  const handleClearDatabase = async () => {
-    try {
-      await executeSql('DELETE FROM enrolled_faces');
-      await executeSql('DELETE FROM auth_logs');
-      setToastType('success');
-      setToastMessage('Database cleared successfully!');
-      setActiveLog(null);
-      await fetchRecentLogs();
-      await refreshSyncStatus();
-    } catch (err: any) {
-      setToastType('error');
-      setToastMessage('Failed to clear database: ' + err.message);
-    }
+  const handleVerify = () => {
+    setActiveLog(null);
+    setToastMessage(null);
+    setStartTrigger((prev) => prev + 1);
   };
 
   const formatTime = (isoString: string) => {
@@ -231,6 +224,8 @@ export default function DemoAuthScreen({ navigation }: DemoAuthScreenProps) {
           {isFocused ? (
             <FaceAuthenticator
               key={refreshKey}
+              autoStart={false}
+              startTrigger={startTrigger}
               onAuthSuccess={handleAuthSuccess}
               onLivenessFailed={handleLivenessFailed}
               onEnrollmentRequired={handleEnrollmentRequired}
@@ -263,26 +258,18 @@ export default function DemoAuthScreen({ navigation }: DemoAuthScreenProps) {
                   : 'N/A'}
               </Text>
             </View>
-            {/* HACKATHON: show similarity score when DEMO_MODE — builds judge confidence */}
-            {DEMO_MODE && (
-              <View style={styles.cardRow}>
-                <Text style={styles.cardLabel}>Similarity Score</Text>
-                <Text style={[styles.cardValue, styles.scoreValue]}>
-                  {(activeLog.similarity_score * 100).toFixed(1)}%
-                </Text>
-              </View>
-            )}
+
           </View>
         )}
 
         {/* Controls */}
         <View style={styles.controlsContainer}>
           <TouchableOpacity
-            style={styles.clearDbButton}
-            onPress={handleClearDatabase}
-            testID="clear-db-button"
+            style={styles.verifyButton}
+            onPress={handleVerify}
+            testID="verify-button"
           >
-            <Text style={styles.clearDbButtonText}>Clear Database</Text>
+            <Text style={styles.verifyButtonText}>Verify</Text>
           </TouchableOpacity>
         </View>
 
@@ -297,11 +284,7 @@ export default function DemoAuthScreen({ navigation }: DemoAuthScreenProps) {
                   <Text style={styles.logTime}>{formatTime(log.timestamp)}</Text>
                 </View>
                 <View style={styles.logItemBody}>
-                  {DEMO_MODE && (
-                    <Text style={styles.logDetails}>
-                      Score: {(log.similarity_score * 100).toFixed(1)}%
-                    </Text>
-                  )}
+
                   <Text style={styles.logDetails}>
                     GPS:{' '}
                     {log.gps_lat != null && log.gps_lng != null
@@ -460,14 +443,14 @@ const styles = StyleSheet.create({
   controlsContainer: {
     gap: 12,
   },
-  clearDbButton: {
-    backgroundColor: '#f44336',
+  verifyButton: {
+    backgroundColor: '#1a237e',
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  clearDbButtonText: {
+  verifyButtonText: {
     color: '#ffffff',
     fontWeight: 'bold',
     fontSize: 16,

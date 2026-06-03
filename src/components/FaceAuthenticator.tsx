@@ -15,42 +15,23 @@ export default function FaceAuthenticator({
   onLivenessFailed,
   onEnrollmentRequired,
   similarityThreshold = SIMILARITY_THRESHOLD,
+  autoStart = true,
+  startTrigger = 0,
 }: FaceAuthenticatorProps) {
   const cameraRef = useRef<any>(null);
   const IS_TEST = typeof (global as any).jest !== 'undefined' || process.env.NODE_ENV === 'test';
   const [webViewReady, setWebViewReady] = useState(IS_TEST);
   const authStartedRef = useRef(false);
-  const [showBypass, setShowBypass] = useState(false);
   const [showAnalyzingWarning, setShowAnalyzingWarning] = useState(false);
 
-  const { status, logData, error, prompt, startAuth, reset, forceChallenge } = useAuth(cameraRef, {
+  const { status, logData, error, prompt, startAuth, reset } = useAuth(cameraRef, {
     similarityThreshold,
     onAuthSuccess,
     onLivenessFailed,
     onEnrollmentRequired,
   });
 
-  // Track time spent in liveness challenge to show bypass option after 3 seconds
-  useEffect(() => {
-    if (
-      status === 'liveness' &&
-      prompt &&
-      (prompt === 'Please blink' || prompt === 'Turn head slightly')
-    ) {
-      setShowBypass(false);
-      const timer = setTimeout(() => {
-        setShowBypass(true);
-      }, 3000);
-      return () => clearTimeout(timer);
-    } else {
-      setShowBypass(false);
-    }
-  }, [status, prompt]);
 
-  const handleBypass = () => {
-    forceChallenge();
-    setShowBypass(false);
-  };
 
   // Show "analyzing" only during matching (not during liveness prompts)
   useEffect(() => {
@@ -73,14 +54,30 @@ export default function FaceAuthenticator({
 
   // Start auth once WebView is ready — brief delay so Camera is running after navigation
   useEffect(() => {
-    if (webViewReady && !authStartedRef.current) {
+    if (autoStart && webViewReady && !authStartedRef.current) {
       authStartedRef.current = true;
       const timer = setTimeout(() => {
         startAuth(true);
       }, IS_TEST ? 0 : 600);
       return () => clearTimeout(timer);
     }
-  }, [webViewReady]);
+  }, [webViewReady, autoStart]);
+
+  // Handle manual start/trigger from parent
+  useEffect(() => {
+    if (!autoStart && startTrigger > 0 && webViewReady) {
+      if (cameraRef.current) {
+        authStartedRef.current = true;
+        reset();
+        const timer = setTimeout(() => {
+          startAuth(true);
+        }, 50);
+        return () => clearTimeout(timer);
+      } else {
+        console.warn('Camera is not ready yet.');
+      }
+    }
+  }, [startTrigger, webViewReady, autoStart]);
 
 
 
@@ -155,14 +152,7 @@ export default function FaceAuthenticator({
           />
         )}
 
-        {/* HACKATHON: show similarity score for 3s on success when DEMO_MODE — builds judge confidence */}
-        {status === 'authenticated' && DEMO_MODE && logData && (
-          <View style={styles.scoreBanner} testID="score-banner">
-            <Text style={styles.scoreText}>
-              Match: {(logData.similarity_score * 100).toFixed(1)}%
-            </Text>
-          </View>
-        )}
+
 
         {status === 'failed' && error && (
           <LivenessFeedback
@@ -174,11 +164,7 @@ export default function FaceAuthenticator({
 
         {/* Bottom Status Pill */}
         <View style={styles.pillContainer} pointerEvents="box-none">
-          {status === 'liveness' && showBypass && (
-            <TouchableOpacity style={styles.bypassButton} onPress={handleBypass} testID="bypass-button">
-              <Text style={styles.bypassText}>Tap here if detection is slow</Text>
-            </TouchableOpacity>
-          )}
+
 
           <View style={styles.statusPill} testID="status-pill">
             <Text style={styles.statusText}>{statusText}</Text>
@@ -239,43 +225,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
   },
-  bypassButton: {
-    backgroundColor: '#ff9800', // Warning orange
-    paddingVertical: 10,
-    paddingHorizontal: 24,
-    borderRadius: 20,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.22,
-    shadowRadius: 2.22,
-  },
-  bypassText: {
-    color: '#ffffff',
-    fontWeight: 'bold',
-    fontSize: 16,
-    textAlign: 'center',
-  },
-  // HACKATHON: DEMO_MODE score overlay shown below success banner
-  scoreBanner: {
-    position: 'absolute',
-    top: 130,
-    left: 20,
-    right: 20,
-    backgroundColor: 'rgba(26, 35, 126, 0.85)',
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 4,
-  },
-  scoreText: {
-    color: '#ffffff',
-    fontWeight: 'bold',
-    fontSize: 18,
-    textAlign: 'center',
-  },
+
   analyzingBanner: {
     position: 'absolute',
     top: 130, // rendered below the main liveness feedback banner (top: 40)
