@@ -1,14 +1,21 @@
 'use strict';
 
 const express = require('express');
+const cors = require('cors');
 
 const app = express();
-const PORT = 3001;
+
+// Enable CORS for all origins (hackathon demo — restrict in production)
+app.use(cors({
+  origin: '*',  // Allow any origin (your phone)
+  methods: ['GET', 'POST'],
+  allowedHeaders: ['Content-Type']
+}));
+
+app.use(express.json());
 
 // In-memory idempotency store: tracks log_ids already processed
 const seenLogIds = new Set();
-
-app.use(express.json());
 
 /**
  * POST /api/sync
@@ -53,13 +60,19 @@ app.post('/api/sync', (req, res) => {
   });
 });
 
-// Health check endpoint
-app.get('/health', (_req, res) => {
-  res.status(200).json({ status: 'ok', seen_count: seenLogIds.size });
+// Health check endpoint (Render needs it for uptime monitoring)
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    uptime: process.uptime(),
+    logs_received: seenLogIds.size 
+  });
 });
 
+const PORT = process.env.PORT || 3001;
+
 app.listen(PORT, () => {
-  console.log(`[Mock AWS Server] Running on http://localhost:${PORT}`);
+  console.log(`[Mock AWS Server] Running on port ${PORT}`);
   console.log(`[Mock AWS Server] POST /api/sync  — Accepts { logs: AuthLog[] }`);
   console.log(`[Mock AWS Server] GET  /health     — Server health check`);
 });
