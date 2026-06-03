@@ -11,6 +11,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.binarybrains.datalake",
+      "flipper": false,
       "infoPlist": {
         "NSCameraUsageDescription": "Allow binary-brains-datalake to access camera.",
         "NSLocationWhenInUseUsageDescription": "Allow binary-brains-datalake to access location."

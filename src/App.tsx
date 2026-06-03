@@ -94,6 +94,7 @@ export default function App() {
           allowFileAccess={true}
           allowFileAccessFromFileURLs={true}
           allowUniversalAccessFromFileURLs={true}
+          allowingReadAccessToURL={getMediaPipeHTMLUri().substring(0, getMediaPipeHTMLUri().lastIndexOf('/') + 1)}
           javaScriptEnabled={true}
           domStorageEnabled={true}
           mixedContentMode="always"

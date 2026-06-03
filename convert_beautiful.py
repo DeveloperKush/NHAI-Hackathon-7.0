@@ -8,7 +8,7 @@ def render_md_to_beautiful_html(md_path, html_path):
     with open(md_path, "r", encoding="utf-8") as f:
         md_text = f.read()
 
-    # Parse Markdown to HTML
+    # Parse Markdown to HTMLg
     print("Parsing markdown to HTML...")
     md = MarkdownIt()
     html_body = md.render(md_text)
