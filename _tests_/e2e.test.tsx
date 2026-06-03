@@ -34,7 +34,7 @@ import { useAuth } from '../src/hooks/useAuth';
 jest.mock('../src/constants/config', () => ({
   AWS_SYNC_URL: 'http://mock-e2e.test/api/sync',
   LAST_SYNC_STORAGE_KEY: '@nhai_last_sync_ts',
-  SIMILARITY_THRESHOLD: 0.86,
+  SIMILARITY_THRESHOLD: 0.84,
   SIMILARITY_SINGLE_USER_THRESHOLD: 0.75,
   SIMILARITY_HIGH_CONFIDENCE: 0.91,
   MIN_MATCH_MARGIN: 0.05,

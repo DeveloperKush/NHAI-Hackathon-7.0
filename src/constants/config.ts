@@ -1,5 +1,5 @@
-/** Multi-user minimum best score (live genuine ~0.86–0.89). */
-export const SIMILARITY_THRESHOLD = 0.86;
+/** Multi-user minimum best score (live genuine ~0.84–0.89). */
+export const SIMILARITY_THRESHOLD = 0.84;
 
 /** Single-user match floor (center-crop path; genuine ~0.83–0.92, ceiling &lt;0.80). */
 // HACKATHON: liveness is enabled (blink + head turn + depth), so we can accept lower

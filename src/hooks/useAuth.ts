@@ -31,8 +31,6 @@ import * as Location from 'expo-location';
 const IS_TEST_ENV =
   typeof (global as { jest?: unknown }).jest !== 'undefined' || process.env.NODE_ENV === 'test';
 
-// HACKATHON: keep liveness enabled for the demo (blink + head turn only).
-const HACKATHON_BYPASS_LIVENESS = false;
 
 async function extractEmbeddingForAuth(
   cameraRef: { takePictureAsync?: (opts: object) => Promise<{ base64?: string }> } | null,
@@ -127,6 +125,7 @@ export function useAuth(cameraRef: any, options?: UseAuthOptions) {
 
   const reset = () => {
     setStatus('idle');
+    livenessEngineRef.current = null;
     if (isMountedRef.current) {
       setLogData(null);
       setError(null);
@@ -153,120 +152,7 @@ export function useAuth(cameraRef: any, options?: UseAuthOptions) {
 
       if (statusRef.current !== 'scanning') return;
 
-      // HACKATHON: device auth skips liveness; one native-shrunk capture then match.
-      if (HACKATHON_BYPASS_LIVENESS) {
-        setStatus('matching');
-        const enrolledFacesBypass = await getAllEnrolledFaces();
-        if (enrolledFacesBypass.length === 0) {
-          const enrollError: LivenessError = {
-            code: 'NO_FACE_DETECTED',
-            message: 'No enrolled faces found in local database.',
-          };
-          if (isMountedRef.current) {
-            setError(enrollError);
-            setPrompt(null);
-          }
-          setStatus('failed');
-          options?.onEnrollmentRequired?.();
-          return;
-        }
 
-        const modelStatus = getModelStatus();
-        if (modelStatus.error || !modelStatus.loaded) {
-          const loadError: LivenessError = {
-            code: 'NO_FACE_DETECTED',
-            message: 'AI model unavailable. Please restart app.',
-          };
-          if (isMountedRef.current) {
-            setError(loadError);
-            setPrompt(null);
-          }
-          setStatus('failed');
-          options?.onLivenessFailed?.(loadError);
-          return;
-        }
-
-        let embeddingBypass: Float32Array;
-        let bypassBase64 = '';
-        try {
-          bypassBase64 = await captureRecognitionBase64(cameraRef?.current ?? {});
-          lastFrameBase64 = bypassBase64;
-          embeddingBypass = await extractEmbeddingForAuth(cameraRef?.current ?? null, bypassBase64);
-        } catch (err: unknown) {
-          console.error('Embedding extraction failed:', err);
-          const extractError: LivenessError = {
-            code: 'NO_FACE_DETECTED',
-            message:
-              err instanceof LowQualityFrameError || err instanceof NoFaceDetectedError
-                ? err.message
-                : 'Face encoding failed. Please retry.',
-          };
-          if (isMountedRef.current) {
-            setError(extractError);
-            setPrompt(null);
-          }
-          setStatus('failed');
-          options?.onLivenessFailed?.(extractError);
-          return;
-        }
-
-        const bestMatchBypass = findBestMatch(embeddingBypass, enrolledFacesBypass);
-        console.log(
-          'AUTH_MATCH (bypass):',
-          'user_id=',
-          bestMatchBypass.user_id,
-          'score=',
-          bestMatchBypass.score.toFixed(4),
-          bestMatchBypass.rejectReason ?? ''
-        );
-
-        if (bestMatchBypass.user_id !== null) {
-          let gps_lat: number | null = null;
-          let gps_lng: number | null = null;
-          try {
-            const { status: locStatus } = await Location.requestForegroundPermissionsAsync();
-            if (locStatus === 'granted') {
-              const loc = await Location.getCurrentPositionAsync({
-                accuracy: Location.Accuracy.Balanced,
-              });
-              gps_lat = loc.coords.latitude;
-              gps_lng = loc.coords.longitude;
-            }
-          } catch (locErr) {
-            console.warn('GPS location request failed:', locErr);
-          }
-
-          const authenticatedLog: AuthLog = {
-            log_id: uuidv4(),
-            user_id: bestMatchBypass.user_id,
-            timestamp: new Date().toISOString(),
-            gps_lat,
-            gps_lng,
-            device_id: generateDeviceId(),
-            similarity_score: bestMatchBypass.score,
-            photo_thumb: lastFrameBase64 || bypassBase64,
-          };
-          await insertAuthLog(authenticatedLog);
-          if (isMountedRef.current) setLogData(authenticatedLog);
-          setStatus('authenticated');
-          options?.onAuthSuccess?.(authenticatedLog);
-          syncAuthLogs().catch((syncErr) => console.warn('Background sync failed:', syncErr));
-        } else {
-        const matchError: LivenessError = {
-          code: 'NO_FACE_DETECTED',
-          message:
-            bestMatchBypass.rejectReason ??
-            `Not recognized (score ${bestMatchBypass.score.toFixed(2)}).`,
-        };
-          if (isMountedRef.current) {
-            setError(matchError);
-            setPrompt(null);
-          }
-          setStatus('failed');
-          options?.onLivenessFailed?.(matchError);
-        }
-        return;
-      }
 
       // Capture preview frame for liveness path only (full pipeline — not used on bypass)
       try {
@@ -694,17 +580,6 @@ export function useAuth(cameraRef: any, options?: UseAuthOptions) {
     }
   };
 
-  const forceChallenge = () => {
-    if (livenessEngineRef.current) {
-      livenessEngineRef.current.forceChallengeDetected();
-      if (isMountedRef.current) {
-        const state = livenessEngineRef.current.getState();
-        const { getPromptForState } = require('../services/ai/liveness');
-        setPrompt(getPromptForState(state));
-      }
-    }
-  };
-
   return {
     status,
     logData,
@@ -712,6 +587,5 @@ export function useAuth(cameraRef: any, options?: UseAuthOptions) {
     prompt,
     startAuth,
     reset,
-    forceChallenge,
   };
 }

@@ -106,7 +106,7 @@ export default function CameraOverlay({ cameraRef, status, children }: CameraOve
       )}
 
       {/* Semi-transparent Overlay with Cutout */}
-      <View style={StyleSheet.absoluteFillObject} pointerEvents="box-none">
+      <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
         {/* Top block */}
         <View style={[styles.overlayBlock, { height: topOffset, width: containerWidth }]} />
 

@@ -21,4 +21,6 @@ export interface FaceAuthenticatorProps {
   onLivenessFailed: (err: LivenessError) => void;
   onEnrollmentRequired: () => void;
   similarityThreshold?: number; // default 0.6
+  autoStart?: boolean;
+  startTrigger?: number;
 }
