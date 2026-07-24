@@ -1,0 +1,1500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EdgeLock — NHAI Hackathon 7.0 | Binary Brains</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-primary: #0a0e1a;
+    --bg-secondary: #111827;
+    --bg-card: #1a1f35;
+    --accent-blue: #3b82f6;
+    --accent-indigo: #6366f1;
+    --accent-violet: #8b5cf6;
+    --accent-cyan: #06b6d4;
+    --accent-emerald: #10b981;
+    --accent-amber: #f59e0b;
+    --accent-rose: #f43f5e;
+    --text-primary: #f1f5f9;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --shadow-3d: 0 20px 60px rgba(0,0,0,0.5), 0 8px 20px rgba(0,0,0,0.3);
+    --shadow-card: 0 10px 40px rgba(0,0,0,0.4), 0 4px 12px rgba(0,0,0,0.2);
+    --shadow-glow-blue: 0 0 40px rgba(59,130,246,0.15), 0 0 80px rgba(59,130,246,0.05);
+    --shadow-glow-violet: 0 0 40px rgba(139,92,246,0.15), 0 0 80px rgba(139,92,246,0.05);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: var(--bg-primary);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    color: var(--text-primary);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ─── Slide Container ─── */
+  .deck {
+    width: 100%; height: 100%;
+    position: relative;
+    perspective: 1400px;
+  }
+
+  .slide {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 60px 80px;
+    opacity: 0;
+    transform: translateZ(-200px) rotateY(8deg);
+    transition: opacity 0.7s ease, transform 0.7s cubic-bezier(0.25,0.46,0.45,0.94);
+    pointer-events: none;
+    overflow: hidden;
+  }
+
+  .slide.active {
+    opacity: 1;
+    transform: translateZ(0) rotateY(0);
+    pointer-events: all;
+  }
+
+  .slide.exiting-left {
+    opacity: 0;
+    transform: translateZ(-100px) rotateY(-6deg) translateX(-8%);
+  }
+
+  .slide.exiting-right {
+    opacity: 0;
+    transform: translateZ(-100px) rotateY(6deg) translateX(8%);
+  }
+
+  /* ─── Background patterns ─── */
+  .slide::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 80% 60% at 20% 80%, rgba(99,102,241,0.06) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 50% at 80% 20%, rgba(59,130,246,0.06) 0%, transparent 60%);
+    pointer-events: none;
+  }
+
+  .slide .grid-bg {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+    background-size: 60px 60px;
+    pointer-events: none;
+    mask-image: radial-gradient(ellipse 70% 70% at 50% 50%, black, transparent);
+  }
+
+  /* ─── Typography ─── */
+  .slide-number {
+    position: absolute;
+    top: 32px; right: 40px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .slide-tag {
+    display: inline-block;
+    padding: 6px 16px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 20px;
+  }
+
+  .tag-blue { background: rgba(59,130,246,0.15); color: var(--accent-blue); border: 1px solid rgba(59,130,246,0.25); }
+  .tag-violet { background: rgba(139,92,246,0.15); color: var(--accent-violet); border: 1px solid rgba(139,92,246,0.25); }
+  .tag-emerald { background: rgba(16,185,129,0.15); color: var(--accent-emerald); border: 1px solid rgba(16,185,129,0.25); }
+  .tag-amber { background: rgba(245,158,11,0.15); color: var(--accent-amber); border: 1px solid rgba(245,158,11,0.25); }
+  .tag-cyan { background: rgba(6,182,212,0.15); color: var(--accent-cyan); border: 1px solid rgba(6,182,212,0.25); }
+  .tag-rose { background: rgba(244,63,94,0.15); color: var(--accent-rose); border: 1px solid rgba(244,63,94,0.25); }
+
+  h1 {
+    font-size: clamp(40px, 5vw, 72px);
+    font-weight: 900;
+    line-height: 1.05;
+    letter-spacing: -2px;
+    margin-bottom: 16px;
+  }
+
+  h2 {
+    font-size: clamp(32px, 4vw, 52px);
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: -1.5px;
+    margin-bottom: 12px;
+  }
+
+  h3 {
+    font-size: clamp(20px, 2.5vw, 28px);
+    font-weight: 700;
+    line-height: 1.2;
+    margin-bottom: 8px;
+  }
+
+  .subtitle {
+    font-size: clamp(16px, 1.8vw, 22px);
+    color: var(--text-secondary);
+    font-weight: 500;
+    line-height: 1.5;
+    max-width: 700px;
+  }
+
+  .gradient-text {
+    background: linear-gradient(135deg, var(--accent-blue), var(--accent-violet), var(--accent-cyan));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .gradient-text-warm {
+    background: linear-gradient(135deg, var(--accent-amber), var(--accent-rose));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .gradient-text-cool {
+    background: linear-gradient(135deg, var(--accent-cyan), var(--accent-emerald));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* ─── 3D Cards ─── */
+  .card-3d {
+    background: var(--bg-card);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 16px;
+    padding: 32px;
+    box-shadow: var(--shadow-card);
+    transform: translateZ(0);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    position: relative;
+  }
+
+  .card-3d::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 16px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+    pointer-events: none;
+  }
+
+  .card-3d:hover {
+    transform: translateY(-4px) translateZ(10px);
+    box-shadow: var(--shadow-3d);
+  }
+
+  .card-3d-raised {
+    background: linear-gradient(145deg, #1e2540, #161b30);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 20px;
+    padding: 36px;
+    box-shadow:
+      0 25px 50px rgba(0,0,0,0.4),
+      0 10px 20px rgba(0,0,0,0.3),
+      inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+
+  /* ─── Layout helpers ─── */
+  .flex-row { display: flex; gap: 24px; align-items: stretch; width: 100%; }
+  .flex-col { display: flex; flex-direction: column; gap: 16px; }
+  .flex-1 { flex: 1; min-width: 0; }
+  .text-center { text-align: center; }
+  .items-center { align-items: center; }
+  .justify-center { justify-content: center; }
+  .w-full { width: 100%; max-width: 1100px; }
+  .gap-32 { gap: 32px; }
+  .gap-20 { gap: 20px; }
+  .mt-8 { margin-top: 8px; }
+  .mt-16 { margin-top: 16px; }
+  .mt-24 { margin-top: 24px; }
+  .mt-32 { margin-top: 32px; }
+  .mb-8 { margin-bottom: 8px; }
+
+  /* ─── Feature pills ─── */
+  .feature-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    background: var(--bg-card);
+    border: 1px solid rgba(255,255,255,0.06);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  }
+
+  .feature-pill .icon {
+    font-size: 18px;
+  }
+
+  /* ─── Stat block ─── */
+  .stat-block {
+    text-align: center;
+    padding: 24px 16px;
+  }
+
+  .stat-value {
+    font-size: clamp(36px, 4vw, 56px);
+    font-weight: 900;
+    letter-spacing: -2px;
+    line-height: 1;
+  }
+
+  .stat-label {
+    font-size: 13px;
+    color: var(--text-muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-top: 8px;
+  }
+
+  /* ─── Pipeline flow ─── */
+  .pipeline {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    width: 100%;
+    max-width: 1050px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .pipeline-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 20px 14px;
+    border-radius: 14px;
+    background: var(--bg-card);
+    border: 1px solid rgba(255,255,255,0.06);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    min-width: 110px;
+    max-width: 140px;
+    text-align: center;
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  .pipeline-step .step-icon {
+    font-size: 28px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .pipeline-step .step-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-secondary);
+    line-height: 1.3;
+  }
+
+  .pipeline-arrow {
+    font-size: 20px;
+    color: var(--accent-indigo);
+    flex-shrink: 0;
+    padding: 0 4px;
+    font-weight: 800;
+  }
+
+  /* ─── List styles ─── */
+  .check-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .check-list li {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    font-size: 15px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+  }
+
+  .check-list li .check-icon {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 800;
+    margin-top: 1px;
+  }
+
+  .check-blue { background: rgba(59,130,246,0.15); color: var(--accent-blue); border: 1px solid rgba(59,130,246,0.25); }
+  .check-emerald { background: rgba(16,185,129,0.15); color: var(--accent-emerald); border: 1px solid rgba(16,185,129,0.25); }
+  .check-violet { background: rgba(139,92,246,0.15); color: var(--accent-violet); border: 1px solid rgba(139,92,246,0.25); }
+  .check-amber { background: rgba(245,158,11,0.15); color: var(--accent-amber); border: 1px solid rgba(245,158,11,0.25); }
+  .check-cyan { background: rgba(6,182,212,0.15); color: var(--accent-cyan); border: 1px solid rgba(6,182,212,0.25); }
+  .check-rose { background: rgba(244,63,94,0.15); color: var(--accent-rose); border: 1px solid rgba(244,63,94,0.25); }
+
+  /* ─── Photo placeholder ─── */
+  .photo-placeholder {
+    width: 100%;
+    aspect-ratio: 16/10;
+    border-radius: 16px;
+    background: linear-gradient(145deg, #1a1f38, #12162a);
+    border: 2px dashed rgba(255,255,255,0.1);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    color: var(--text-muted);
+    font-size: 14px;
+    font-weight: 600;
+    position: relative;
+    overflow: hidden;
+    box-shadow: inset 0 2px 20px rgba(0,0,0,0.3);
+  }
+
+  .photo-placeholder .ph-icon {
+    font-size: 40px;
+    opacity: 0.5;
+  }
+
+  .photo-placeholder .ph-label {
+    font-size: 12px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    opacity: 0.6;
+  }
+
+  .photo-placeholder-sm {
+    aspect-ratio: 4/3;
+  }
+
+  .photo-placeholder-square {
+    aspect-ratio: 1;
+  }
+
+  .photo-placeholder-phone {
+    width: 180px;
+    height: 360px;
+    aspect-ratio: auto;
+    border-radius: 24px;
+    border: 3px solid rgba(255,255,255,0.12);
+    background: linear-gradient(180deg, #1a1f38 0%, #0f1225 100%);
+    box-shadow: 0 20px 50px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05);
+  }
+
+  .photo-placeholder-phone::before {
+    content: '';
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 60px;
+    height: 4px;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.1);
+  }
+
+  /* ─── Tech stack grid ─── */
+  .tech-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    width: 100%;
+    max-width: 1100px;
+  }
+
+  .tech-item {
+    background: var(--bg-card);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+    transition: transform 0.2s ease;
+  }
+
+  .tech-item:hover {
+    transform: translateY(-2px);
+  }
+
+  .tech-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+
+  .tech-item .tech-name {
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+
+  .tech-item .tech-desc {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 2px;
+    line-height: 1.3;
+  }
+
+  /* ─── 3D floating element ─── */
+  .float-3d {
+    animation: float3d 6s ease-in-out infinite;
+  }
+
+  @keyframes float3d {
+    0%, 100% { transform: translateY(0) rotate3d(1, 1, 0, 0deg); }
+    25% { transform: translateY(-10px) rotate3d(1, 0, 0, 2deg); }
+    50% { transform: translateY(-6px) rotate3d(0, 1, 0, -2deg); }
+    75% { transform: translateY(-12px) rotate3d(1, 1, 0, 1deg); }
+  }
+
+  /* ─── Glow orbs ─── */
+  .glow-orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    pointer-events: none;
+    opacity: 0.3;
+  }
+
+  .orb-blue {
+    background: var(--accent-blue);
+    width: 300px; height: 300px;
+  }
+
+  .orb-violet {
+    background: var(--accent-violet);
+    width: 250px; height: 250px;
+  }
+
+  .orb-cyan {
+    background: var(--accent-cyan);
+    width: 200px; height: 200px;
+  }
+
+  /* ─── Navigation ─── */
+  .nav-bar {
+    position: fixed;
+    bottom: 28px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    z-index: 100;
+    padding: 10px 20px;
+    border-radius: 14px;
+    background: rgba(17,24,39,0.85);
+    border: 1px solid rgba(255,255,255,0.08);
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+    backdrop-filter: blur(12px);
+  }
+
+  .nav-btn {
+    width: 40px; height: 40px;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.04);
+    color: var(--text-secondary);
+    font-size: 18px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    font-weight: 700;
+  }
+
+  .nav-btn:hover {
+    background: rgba(255,255,255,0.08);
+    color: var(--text-primary);
+    border-color: rgba(255,255,255,0.15);
+  }
+
+  .nav-dots {
+    display: flex;
+    gap: 6px;
+    padding: 0 8px;
+  }
+
+  .nav-dot {
+    width: 8px; height: 8px;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.15);
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+
+  .nav-dot.active {
+    width: 24px;
+    background: var(--accent-indigo);
+  }
+
+  .nav-counter {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+    min-width: 40px;
+    text-align: center;
+  }
+
+  /* ─── NHAI Badge ─── */
+  .nhai-badge {
+    position: absolute;
+    top: 28px;
+    left: 40px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-muted);
+    letter-spacing: 1px;
+  }
+
+  .nhai-badge .badge-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--accent-emerald);
+    box-shadow: 0 0 8px rgba(16,185,129,0.5);
+  }
+
+  /* ─── Title slide special ─── */
+  .title-slide {
+    background: radial-gradient(ellipse 80% 60% at 50% 40%, rgba(99,102,241,0.08) 0%, transparent 60%);
+  }
+
+  .title-3d-block {
+    padding: 48px 64px;
+    border-radius: 28px;
+    background: linear-gradient(145deg, rgba(30,37,64,0.9), rgba(22,27,48,0.9));
+    border: 1px solid rgba(255,255,255,0.08);
+    box-shadow:
+      0 40px 80px rgba(0,0,0,0.5),
+      0 15px 30px rgba(0,0,0,0.3),
+      inset 0 1px 0 rgba(255,255,255,0.06),
+      0 0 80px rgba(99,102,241,0.06);
+    text-align: center;
+    max-width: 800px;
+    position: relative;
+  }
+
+  .team-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 20px;
+    border-radius: 8px;
+    background: rgba(99,102,241,0.1);
+    border: 1px solid rgba(99,102,241,0.2);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--accent-indigo);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-top: 24px;
+  }
+
+  /* ─── Slide layouts ─── */
+  .split-layout {
+    display: flex;
+    gap: 48px;
+    align-items: center;
+    width: 100%;
+    max-width: 1100px;
+  }
+
+  .split-left, .split-right {
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* ─── Animated entrance ─── */
+  .slide.active .anim-up {
+    animation: animUp 0.6s ease forwards;
+  }
+
+  .slide.active .anim-up-d1 { animation-delay: 0.1s; }
+  .slide.active .anim-up-d2 { animation-delay: 0.2s; }
+  .slide.active .anim-up-d3 { animation-delay: 0.3s; }
+  .slide.active .anim-up-d4 { animation-delay: 0.4s; }
+  .slide.active .anim-up-d5 { animation-delay: 0.5s; }
+
+  .anim-up {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+
+  @keyframes animUp {
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ─── Security shield ─── */
+  .shield-icon {
+    width: 80px; height: 80px;
+    border-radius: 20px;
+    background: linear-gradient(135deg, rgba(16,185,129,0.15), rgba(6,182,212,0.15));
+    border: 1px solid rgba(16,185,129,0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 36px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    margin-bottom: 20px;
+  }
+
+  /* ─── Code-like block ─── */
+  .code-block {
+    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 12px;
+    padding: 20px 24px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--text-secondary);
+    overflow-x: auto;
+  }
+
+  .code-block .keyword { color: var(--accent-violet); }
+  .code-block .string { color: var(--accent-emerald); }
+  .code-block .comment { color: var(--text-muted); font-style: italic; }
+  .code-block .number { color: var(--accent-amber); }
+
+  /* ─── Impact metrics ─── */
+  .metric-card {
+    padding: 28px;
+    border-radius: 16px;
+    background: var(--bg-card);
+    border: 1px solid rgba(255,255,255,0.06);
+    text-align: center;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    flex: 1;
+  }
+
+  .metric-card .metric-value {
+    font-size: clamp(28px, 3.5vw, 44px);
+    font-weight: 900;
+    letter-spacing: -1px;
+  }
+
+  .metric-card .metric-label {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-top: 6px;
+  }
+
+  /* ─── Responsive ─── */
+  @media (max-width: 900px) {
+    .slide { padding: 40px 32px; }
+    .split-layout { flex-direction: column; gap: 32px; }
+    .flex-row { flex-direction: column; }
+    .pipeline { flex-wrap: wrap; }
+    .tech-grid { grid-template-columns: repeat(2, 1fr); }
+    .title-3d-block { padding: 32px; }
+    .photo-placeholder-phone { width: 140px; height: 280px; }
+  }
+
+  /* ─── Fullscreen button ─── */
+  .fullscreen-btn {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 200;
+    width: 36px; height: 36px;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(17,24,39,0.6);
+    color: var(--text-muted);
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    backdrop-filter: blur(8px);
+  }
+
+  .fullscreen-btn:hover {
+    background: rgba(17,24,39,0.9);
+    color: var(--text-primary);
+  }
+
+  /* ─── Progress bar ─── */
+  .progress-bar {
+    position: fixed;
+    top: 0; left: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--accent-blue), var(--accent-violet));
+    transition: width 0.5s ease;
+    z-index: 200;
+    box-shadow: 0 0 10px rgba(99,102,241,0.4);
+  }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progressBar"></div>
+<button class="fullscreen-btn" onclick="toggleFullscreen()" title="Toggle Fullscreen">⛶</button>
+
+<div class="deck" id="deck">
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 1: TITLE -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <div class="slide title-slide active" data-slide="0">
+    <div class="grid-bg"></div>
+    <div class="glow-orb orb-blue" style="top: -100px; left: -80px;"></div>
+    <div class="glow-orb orb-violet" style="bottom: -80px; right: -60px;"></div>
+
+    <div class="title-3d-block float-3d anim-up">
+      <div class="slide-tag tag-blue">NHAI Hackathon 7.0</div>
+      <h1 class="gradient-text" style="font-size: clamp(48px, 6vw, 84px); letter-spacing: -3px;">EdgeLock</h1>
+      <p class="subtitle" style="margin: 16px auto 0; max-width: 560px;">
+        Enterprise-Grade Offline-First Face Authentication<br>& 3D Liveness Detection
+      </p>
+      <div class="team-badge anim-up anim-up-d2">
+        <span>🧠</span> Team Binary Brains
+      </div>
+    </div>
+
+    <div style="position: absolute; bottom: 80px; display: flex; gap: 32px;" class="anim-up anim-up-d3">
+      <div class="feature-pill"><span class="icon">📱</span> React Native</div>
+      <div class="feature-pill"><span class="icon">🔒</span> Offline-First</div>
+      <div class="feature-pill"><span class="icon">🧬</span> On-Device AI</div>
+    </div>
+
+    <span class="slide-number">01 / 12</span>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 2: PROBLEM STATEMENT -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <div class="slide" data-slide="1">
+    <div class="grid-bg"></div>
+    <div class="glow-orb orb-violet" style="top: 10%; right: -100px; opacity: 0.2;"></div>
+    <span class="nhai-badge"><span class="badge-dot"></span> EdgeLock</span>
+    <span class="slide-number">02 / 12</span>
+
+    <div class="split-layout">
+      <div class="split-left">
+        <div class="slide-tag tag-rose anim-up">The Problem</div>
+        <h2 class="anim-up anim-up-d1">Highway field crews work in <span class="gradient-text-warm">zero-connectivity</span> zones</h2>
+        <ul class="check-list mt-24 anim-up anim-up-d2">
+          <li>
+            <span class="check-icon check-rose">✕</span>
+            <span><strong style="color: var(--text-primary);">No internet</strong> — Remote highways have zero cellular coverage</span>
+          </li>
+          <li>
+            <span class="check-icon check-rose">✕</span>
+            <span><strong style="color: var(--text-primary);">Buddy punching</strong> — Proxy attendance with shared credentials</span>
+          </li>
+          <li>
+            <span class="check-icon check-rose">✕</span>
+            <span><strong style="color: var(--text-primary);">Spoofing attacks</strong> — Photos & videos used to fake identity</span>
+          </li>
+          <li>
+            <span class="check-icon check-rose">✕</span>
+            <span><strong style="color: var(--text-primary);">Audit gap</strong> — No tamper-proof digital trail of attendance</span>
+          </li>
+        </ul>
+      </div>
+      <div class="split-right anim-up anim-up-d3">
+        <div class="photo-placeholder">
+          <span class="ph-icon">🏗️</span>
+          <span class="ph-label">Photo: Highway construction site</span>
+          <span style="font-size: 11px; opacity: 0.4;">Remote NHAI field location</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 3: SOLUTION OVERVIEW -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <div class="slide" data-slide="2">
+    <div class="grid-bg"></div>
+    <div class="glow-orb orb-cyan" style="bottom: -60px; left: -80px; opacity: 0.2;"></div>
+    <span class="nhai-badge"><span class="badge-dot"></span> EdgeLock</span>
+    <span class="slide-number">03 / 12</span>
+
+    <div class="split-layout">
+      <div class="split-left">
+        <div class="slide-tag tag-emerald anim-up">Our Solution</div>
+        <h2 class="anim-up anim-up-d1"><span class="gradient-text-cool">100% Offline</span> Face Auth with 3D Liveness</h2>
+        <ul class="check-list mt-24 anim-up anim-up-d2">
+          <li>
+            <span class="check-icon check-emerald">✓</span>
+            <span><strong style="color: var(--text-primary);">On-device AI</strong> — GhostFaceNet INT8 runs entirely on the phone</span>
+          </li>
+          <li>
+            <span class="check-icon check-emerald">✓</span>
+            <span><strong style="color: var(--text-primary);">3D liveness</strong> — Blink + head turn + depth verification</span>
+          </li>
+          <li>
+            <span class="check-icon check-emerald">✓</span>
+            <span><strong style="color: var(--text-primary);">AES-256 encrypted</strong> — Biometric data secured at rest</span>
+          </li>
+          <li>
+            <span class="check-icon check-emerald">✓</span>
+            <span><strong style="color: var(--text-primary);">Auto-sync</strong> — Logs upload when connectivity returns</span>
+          </li>
+          <li>
+            <span class="check-icon check-emerald">✓</span>
+            <span><strong style="color: var(--text-primary);">GPS-tagged</strong> — Every auth log includes geo-coordinates</span>
+          </li>
+        </ul>
+      </div>
+      <div class="split-right flex-col items-center anim-up anim-up-d3">
+        <div class="photo-placeholder photo-placeholder-phone">
+          <span class="ph-icon">📲</span>
+          <span class="ph-label">App screenshot</span>
+          <span style="font-size: 10px; opacity: 0.4;">Auth flow demo</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 4: ARCHITECTURE PIPELINE -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <div class="slide" data-slide="3">
+    <div class="grid-bg"></div>
+    <div class="glow-orb orb-blue" style="top: -80px; right: 20%; opacity: 0.15;"></div>
+    <span class="nhai-badge"><span class="badge-dot"></span> EdgeLock</span>
+    <span class="slide-number">04 / 12</span>
+
+    <div class="text-center w-full">
+      <div class="slide-tag tag-blue anim-up">Architecture</div>
+      <h2 class="anim-up anim-up-d1">End-to-End <span class="gradient-text">Pipeline</span></h2>
+      <p class="subtitle anim-up anim-up-d2" style="margin: 8px auto 40px;">Every step runs on-device — zero cloud dependency during authentication</p>
+
+      <div class="pipeline anim-up anim-up-d3">
+        <div class="pipeline-step">
+          <span class="step-icon">📷</span>
+          <span class="step-label">Camera<br>Feed</span>
+        </div>
+        <span class="pipeline-arrow">→</span>
+        <div class="pipeline-step">
+          <span class="step-icon">🧠</span>
+          <span class="step-label">MediaPipe<br>Face Mesh</span>
+        </div>
+        <span class="pipeline-arrow">→</span>
+        <div class="pipeline-step">
+          <span class="step-icon">🖼️</span>
+          <span class="step-label">JPEG<br>Decode</span>
+        </div>
+        <span class="pipeline-arrow">→</span>
+        <div class="pipeline-step">
+          <span class="step-icon">🔧</span>
+          <span class="step-label">Face Align<br>+ CLAHE</span>
+        </div>
+        <span class="pipeline-arrow">→</span>
+        <div class="pipeline-step">
+          <span class="step-icon">⚡</span>
+          <span class="step-label">GhostFace<br>INT8</span>
+        </div>
+        <span class="pipeline-arrow">→</span>
+        <div class="pipeline-step">
+          <span class="step-icon">🎯</span>
+          <span class="step-label">Cosine<br>Match</span>
+        </div>
+        <span class="pipeline-arrow">→</span>
+        <div class="pipeline-step">
+          <span class="step-icon">🔐</span>
+          <span class="step-label">Encrypted<br>Log</span>
+        </div>
+      </div>
+
+      <div class="flex-row justify-center mt-32 gap-20 anim-up anim-up-d4" style="flex-wrap: wrap; max-width: 700px; margin-left: auto; margin-right: auto;">
+        <div class="feature-pill"><span class="icon">📱</span> 100% On-Device</div>
+        <div class="feature-pill"><span class="icon">⏱️</span> Real-Time Inference</div>
+        <div class="feature-pill"><span class="icon">🔒</span> AES-256 at Rest</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 5: TECH STACK -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <div class="slide" data-slide="4">
+    <div class="grid-bg"></div>
+    <span class="nhai-badge"><span class="badge-dot"></span> EdgeLock</span>
+    <span class="slide-number">05 / 12</span>
+
+    <div class="text-center w-full">
+      <div class="slide-tag tag-violet anim-up">Technology</div>
+      <h2 class="anim-up anim-up-d1">Technical <span class="gradient-text">Stack</span></h2>
+      <p class="subtitle anim-up anim-up-d2" style="margin: 4px auto 32px;">Battle-tested frameworks, zero cloud dependency at runtime</p>
+
+      <div class="tech-grid anim-up anim-up-d3">
+        <div class="tech-item">
+          <div class="tech-icon" style="background: rgba(59,130,246,0.15); color: var(--accent-blue);">⚛️</div>
+          <div>
+            <div class="tech-name">React Native + Expo</div>
+            <div class="tech-desc">SDK 50 · TypeScript Strict</div>
+          </div>
+        </div>
+        <div class="tech-item">
+          <div class="tech-icon" style="background: rgba(245,158,11,0.15); color: var(--accent-amber);">⚡</div>
+          <div>
+            <div class="tech-name">TensorFlow Lite JSI</div>
+            <div class="tech-desc">C++ bridge · Sync inference</div>
+          </div>
+        </div>
+        <div class="tech-item">
+          <div class="tech-icon" style="background: rgba(139,92,246,0.15); color: var(--accent-violet);">🧠</div>
+          <div>
+            <div class="tech-name">GhostFaceNet INT8</div>
+            <div class="tech-desc">1 MB · 512-dim embeddings</div>
+          </div>
+        </div>
+        <div class="tech-item">
+          <div class="tech-icon" style="background: rgba(6,182,212,0.15); color: var(--accent-cyan);">🕸️</div>
+          <div>
+            <div class="tech-name">MediaPipe WASM</div>
+            <div class="tech-desc">468 face landmarks</div>
+          </div>
+        </div>
+        <div class="tech-item">
+          <div class="tech-icon" style="background: rgba(16,185,129,0.15); color: var(--accent-emerald);">🗄️</div>
+          <div>
+            <div class="tech-name">SQLite + AES-256</div>
+            <div class="tech-desc">Encrypted local database</div>
+          </div>
+        </div>
+        <div class="tech-item">
+          <div class="tech-icon" style="background: rgba(244,63,94,0.15); color: var(--accent-rose);">🔑</div>
+          <div>
+            <div class="tech-name">Hardware Keystore</div>
+            <div class="tech-desc">iOS Keychain · Android KS</div>
+          </div>
+        </div>
+        <div class="tech-item">
+          <div class="tech-icon" style="background: rgba(99,102,241,0.15); color: var(--accent-indigo);">📍</div>
+          <div>
+            <div class="tech-name">Expo Location</div>
+            <div class="tech-desc">GPS-tagged auth logs</div>
+          </div>
+        </div>
+        <div class="tech-item">
+          <div class="tech-icon" style="background: rgba(245,158,11,0.15); color: var(--accent-amber);">☁️</div>
+          <div>
+            <div class="tech-name">AWS Sync Queue</div>
+            <div class="tech-desc">Zero-loss batch sync</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 6: 3D LIVENESS DETECTION -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <div class="slide" data-slide="5">
+    <div class="grid-bg"></div>
+    <div class="glow-orb orb-violet" style="top: 20%; left: -100px; opacity: 0.15;"></div>
+    <span class="nhai-badge"><span class="badge-dot"></span> EdgeLock</span>
+    <span class="slide-number">06 / 12</span>
+
+    <div class="split-layout">
+      <div class="split-left">
+        <div class="slide-tag tag-cyan anim-up">Anti-Spoofing</div>
+        <h2 class="anim-up anim-up-d1">Multi-Factor <span class="gradient-text">3D Liveness</span></h2>
+        <p class="subtitle anim-up anim-up-d2 mt-8">Four independent checks defeat photos, videos, and masks</p>
+
+        <div class="flex-col gap-20 mt-24">
+          <div class="card-3d anim-up anim-up-d2" style="padding: 20px 24px;">
+            <h3 style="font-size: 15px; display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 20px;">👁️</span> Eye Aspect Ratio (EAR)
+            </h3>
+            <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">Real-time blink detection — threshold &lt; 0.33</p>
+          </div>
+          <div class="card-3d anim-up anim-up-d3" style="padding: 20px 24px;">
+            <h3 style="font-size: 15px; display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 20px;">↔️</span> Head Yaw Assessment
+            </h3>
+            <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">Smoothed asymmetry detection with hysteresis (ON: 0.12, OFF: 0.09)</p>
+          </div>
+          <div class="card-3d anim-up anim-up-d4" style="padding: 20px 24px;">
+            <h3 style="font-size: 15px; display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 20px;">📐</span> 3D Depth Verification
+            </h3>
+            <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">Z-coordinate std dev separates 3D faces from flat 2D screens</p>
+          </div>
+          <div class="card-3d anim-up anim-up-d5" style="padding: 20px 24px;">
+            <h3 style="font-size: 15px; display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 20px;">🎲</span> Random Challenge Order
+            </h3>
+            <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">Shuffled per session — unpredictable for attackers</p>
+          </div>
+        </div>
+      </div>
+      <div class="split-right flex-col items-center anim-up anim-up-d3">
+        <div class="photo-placeholder photo-placeholder-phone">
+          <span class="ph-icon">🤳</span>
+          <span class="ph-label">Liveness check</span>
+          <span style="font-size: 10px; opacity: 0.4;">"Please blink" prompt</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 7: FACE RECOGNITION ENGINE -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <div class="slide" data-slide="6">
+    <div class="grid-bg"></div>
+    <span class="nhai-badge"><span class="badge-dot"></span> EdgeLock</span>
+    <span class="slide-number">07 / 12</span>
+
+    <div class="split-layout">
+      <div class="split-left">
+        <div class="slide-tag tag-amber anim-up">Recognition</div>
+        <h2 class="anim-up anim-up-d1">GhostFaceNet <span class="gradient-text-warm">INT8 Engine</span></h2>
+        <p class="subtitle anim-up anim-up-d2 mt-8">Desktop-grade accuracy in a 1 MB on-device model</p>
+
+        <div class="code-block mt-24 anim-up anim-up-d3">
+          <span class="comment">// Recognition Pipeline</span><br>
+          <span class="keyword">capture</span> → 3-shot average (180ms apart)<br>
+          <span class="keyword">preprocess</span> → 5-point face alignment (112×112)<br>
+          <span class="keyword">lighting</span> → CLAHE / histogram equalization<br>
+          <span class="keyword">inference</span> → model.runSync() via JSI<br>
+          <span class="keyword">output</span> → 512-dim L2-normalized embedding<br>
+          <span class="keyword">match</span> → cosine similarity vs encrypted DB<br>
+          <br>
+          <span class="comment">// Thresholds</span><br>
+          single_user: <span class="number">0.75</span> | multi_user: <span class="number">0.84</span><br>
+          high_confidence: <span class="number">0.91</span> | margin: <span class="number">0.05</span>
+        </div>
+      </div>
+      <div class="split-right anim-up anim-up-d4">
+        <div class="photo-placeholder">
+          <span class="ph-icon">🎯</span>
+          <span class="ph-label">Photo: Face alignment demo</span>
+          <span style="font-size: 11px; opacity: 0.4;">5-point warp to canonical 112×112</span>
+        </div>
+        <div class="flex-row gap-20 mt-24">
+          <div class="metric-card">
+            <div class="metric-value gradient-text-warm">~1 MB</div>
+            <div class="metric-label">Model Size</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-value gradient-text">512</div>
+            <div class="metric-label">Dimensions</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 8: OFFLINE-FIRST & SECURITY -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <div class="slide" data-slide="7">
+    <div class="grid-bg"></div>
+    <div class="glow-orb orb-cyan" style="bottom: -80px; right: -100px; opacity: 0.15;"></div>
+    <span class="nhai-badge"><span class="badge-dot"></span> EdgeLock</span>
+    <span class="slide-number">08 / 12</span>
+
+    <div class="text-center w-full">
+      <div class="slide-tag tag-emerald anim-up">Security</div>
+      <h2 class="anim-up anim-up-d1">Offline-First & <span class="gradient-text-cool">Zero-Loss Sync</span></h2>
+      <p class="subtitle anim-up anim-up-d2" style="margin: 8px auto 36px;">Data integrity guaranteed — no log is ever lost</p>
+
+      <div class="flex-row gap-32 w-full anim-up anim-up-d3" style="max-width: 1050px; margin: 0 auto;">
+        <div class="card-3d-raised flex-1">
+          <div style="font-size: 36px; margin-bottom: 16px;">🔐</div>
+          <h3>Encrypted Storage</h3>
+          <ul class="check-list mt-16" style="gap: 10px;">
+            <li><span class="check-icon check-emerald" style="width:20px;height:20px;font-size:10px;">✓</span> <span>AES-256-CBC encrypted embeddings</span></li>
+            <li><span class="check-icon check-emerald" style="width:20px;height:20px;font-size:10px;">✓</span> <span>Hardware-backed Keychain/Keystore</span></li>
+            <li><span class="check-icon check-emerald" style="width:20px;height:20px;font-size:10px;">✓</span> <span>Per-install encryption keys</span></li>
+          </ul>
+        </div>
+        <div class="card-3d-raised flex-1">
+          <div style="font-size: 36px; margin-bottom: 16px;">☁️</div>
+          <h3>Zero-Loss Sync</h3>
+          <ul class="check-list mt-16" style="gap: 10px;">
+            <li><span class="check-icon check-cyan" style="width:20px;height:20px;font-size:10px;">✓</span> <span>Purge only after HTTP 200 + ID match</span></li>
+            <li><span class="check-icon check-cyan" style="width:20px;height:20px;font-size:10px;">✓</span> <span>Idempotent server-side processing</span></li>
+            <li><span class="check-icon check-cyan" style="width:20px;height:20px;font-size:10px;">✓</span> <span>Auto-sync on network reconnection</span></li>
+          </ul>
+        </div>
+        <div class="card-3d-raised flex-1">
+          <div style="font-size: 36px; margin-bottom: 16px;">📍</div>
+          <h3>Audit Trail</h3>
+          <ul class="check-list mt-16" style="gap: 10px;">
+            <li><span class="check-icon check-violet" style="width:20px;height:20px;font-size:10px;">✓</span> <span>GPS-tagged every auth event</span></li>
+            <li><span class="check-icon check-violet" style="width:20px;height:20px;font-size:10px;">✓</span> <span>Photo thumbnail captured</span></li>
+            <li><span class="check-icon check-violet" style="width:20px;height:20px;font-size:10px;">✓</span> <span>UUID + ISO8601 timestamps</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 9: DEMO SCREENS -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <div class="slide" data-slide="8">
+    <div class="grid-bg"></div>
+    <span class="nhai-badge"><span class="badge-dot"></span> EdgeLock</span>
+    <span class="slide-number">09 / 12</span>
+
+    <div class="text-center w-full">
+      <div class="slide-tag tag-blue anim-up">Demo</div>
+      <h2 class="anim-up anim-up-d1">App <span class="gradient-text">Screens</span></h2>
+      <p class="subtitle anim-up anim-up-d2" style="margin: 8px auto 40px;">Clean, minimal UI designed for outdoor field operations</p>
+
+      <div class="flex-row justify-center gap-32 anim-up anim-up-d3" style="max-width: 900px; margin: 0 auto;">
+        <div class="flex-col items-center" style="gap: 12px;">
+          <div class="photo-placeholder photo-placeholder-phone">
+            <span class="ph-icon">🏠</span>
+            <span class="ph-label">Home screen</span>
+            <span style="font-size: 10px; opacity: 0.4;">DemoAuthScreen</span>
+          </div>
+          <span style="font-size: 13px; font-weight: 600; color: var(--text-muted);">Authentication</span>
+        </div>
+        <div class="flex-col items-center" style="gap: 12px;">
+          <div class="photo-placeholder photo-placeholder-phone">
+            <span class="ph-icon">👤</span>
+            <span class="ph-label">Enrollment</span>
+            <span style="font-size: 10px; opacity: 0.4;">EnrollmentScreen</span>
+          </div>
+          <span style="font-size: 13px; font-weight: 600; color: var(--text-muted);">Face Enrollment</span>
+        </div>
+        <div class="flex-col items-center" style="gap: 12px;">
+          <div class="photo-placeholder photo-placeholder-phone">
+            <span class="ph-icon">✅</span>
+            <span class="ph-label">Success state</span>
+            <span style="font-size: 10px; opacity: 0.4;">Verified result</span>
+          </div>
+          <span style="font-size: 13px; font-weight: 600; color: var(--text-muted);">Auth Success</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 10: KEY METRICS -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <div class="slide" data-slide="9">
+    <div class="grid-bg"></div>
+    <div class="glow-orb orb-blue" style="top: 30%; left: -80px; opacity: 0.15;"></div>
+    <div class="glow-orb orb-violet" style="bottom: 20%; right: -60px; opacity: 0.12;"></div>
+    <span class="nhai-badge"><span class="badge-dot"></span> EdgeLock</span>
+    <span class="slide-number">10 / 12</span>
+
+    <div class="text-center w-full">
+      <div class="slide-tag tag-amber anim-up">Metrics</div>
+      <h2 class="anim-up anim-up-d1">By The <span class="gradient-text-warm">Numbers</span></h2>
+
+      <div class="flex-row gap-20 mt-32 anim-up anim-up-d2" style="max-width: 1050px; margin-left: auto; margin-right: auto;">
+        <div class="metric-card">
+          <div class="metric-value gradient-text">~1 MB</div>
+          <div class="metric-label">AI Model Size</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value gradient-text-warm">512</div>
+          <div class="metric-label">Embedding Dims</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value gradient-text-cool">468</div>
+          <div class="metric-label">Face Landmarks</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value" style="color: var(--accent-emerald);">0%</div>
+          <div class="metric-label">Cloud Dependency</div>
+        </div>
+      </div>
+
+      <div class="flex-row gap-20 mt-24 anim-up anim-up-d3" style="max-width: 1050px; margin-left: auto; margin-right: auto;">
+        <div class="metric-card">
+          <div class="metric-value gradient-text">AES-256</div>
+          <div class="metric-label">Encryption</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value gradient-text-warm">INT8</div>
+          <div class="metric-label">Quantization</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value gradient-text-cool">9</div>
+          <div class="metric-label">Test Suites</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value" style="color: var(--accent-amber);">0</div>
+          <div class="metric-label">Data Loss Risk</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 11: TESTING & QUALITY -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <div class="slide" data-slide="10">
+    <div class="grid-bg"></div>
+    <span class="nhai-badge"><span class="badge-dot"></span> EdgeLock</span>
+    <span class="slide-number">11 / 12</span>
+
+    <div class="split-layout">
+      <div class="split-left">
+        <div class="slide-tag tag-violet anim-up">Quality</div>
+        <h2 class="anim-up anim-up-d1">Tested & <span class="gradient-text">Production-Ready</span></h2>
+        <p class="subtitle anim-up anim-up-d2 mt-8">Comprehensive test coverage across every system layer</p>
+
+        <div class="code-block mt-24 anim-up anim-up-d3" style="font-size: 12px;">
+          <span class="comment"># 9 test suites covering:</span><br>
+          <span class="string">database.test.ts</span>      <span class="comment">→ SQLite CRUD</span><br>
+          <span class="string">liveness.test.ts</span>      <span class="comment">→ EAR, yaw, depth</span><br>
+          <span class="string">preprocessing.test.ts</span> <span class="comment">→ CLAHE, quality</span><br>
+          <span class="string">recognition.test.ts</span>   <span class="comment">→ Embeddings, cosine</span><br>
+          <span class="string">networkSync.test.ts</span>   <span class="comment">→ Zero-loss sync</span><br>
+          <span class="string">enrollment.test.tsx</span>   <span class="comment">→ Multi-capture flow</span><br>
+          <span class="string">faceAuth.test.tsx</span>     <span class="comment">→ Component render</span><br>
+          <span class="string">orchestration.test.tsx</span><span class="comment">→ Full pipeline</span><br>
+          <span class="string">e2e.test.tsx</span>           <span class="comment">→ End-to-end sim</span>
+        </div>
+      </div>
+      <div class="split-right flex-col gap-20 anim-up anim-up-d3">
+        <div class="card-3d" style="padding: 24px;">
+          <h3 style="font-size: 15px; display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 18px;">🛡️</span> Security Guarantees
+          </h3>
+          <ul class="check-list mt-16" style="gap: 8px;">
+            <li><span class="check-icon check-emerald" style="width:20px;height:20px;font-size:10px;">✓</span> <span>AES-256 encryption tested</span></li>
+            <li><span class="check-icon check-emerald" style="width:20px;height:20px;font-size:10px;">✓</span> <span>Zero-loss purge verified</span></li>
+            <li><span class="check-icon check-emerald" style="width:20px;height:20px;font-size:10px;">✓</span> <span>Idempotent sync tested</span></li>
+          </ul>
+        </div>
+        <div class="card-3d" style="padding: 24px;">
+          <h3 style="font-size: 15px; display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 18px;">⚙️</span> Build & Deploy
+          </h3>
+          <ul class="check-list mt-16" style="gap: 8px;">
+            <li><span class="check-icon check-blue" style="width:20px;height:20px;font-size:10px;">✓</span> <span>EAS cloud builds (no Mac needed)</span></li>
+            <li><span class="check-icon check-blue" style="width:20px;height:20px;font-size:10px;">✓</span> <span>iOS + Android from Windows</span></li>
+            <li><span class="check-icon check-blue" style="width:20px;height:20px;font-size:10px;">✓</span> <span>TypeScript strict mode, 0 errors</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 12: THANK YOU -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <div class="slide" data-slide="11">
+    <div class="grid-bg"></div>
+    <div class="glow-orb orb-blue" style="top: -80px; left: 30%; opacity: 0.2;"></div>
+    <div class="glow-orb orb-violet" style="bottom: -60px; right: 30%; opacity: 0.18;"></div>
+    <div class="glow-orb orb-cyan" style="top: 40%; right: -80px; opacity: 0.12;"></div>
+
+    <div class="title-3d-block float-3d anim-up" style="max-width: 700px;">
+      <h1 class="gradient-text" style="font-size: clamp(40px, 5vw, 64px);">Thank You</h1>
+      <p class="subtitle" style="margin: 16px auto 0; max-width: 500px;">
+        EdgeLock brings enterprise-grade biometric security to India's most remote highways — fully offline.
+      </p>
+      <div class="team-badge anim-up anim-up-d2">
+        <span>🧠</span> Team Binary Brains
+      </div>
+      <div class="mt-32 anim-up anim-up-d3" style="display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;">
+        <div class="feature-pill"><span class="icon">💬</span> Questions?</div>
+        <div class="feature-pill"><span class="icon">📱</span> Live Demo Ready</div>
+      </div>
+    </div>
+
+    <div style="position: absolute; bottom: 80px; display: flex; gap: 32px; flex-wrap: wrap; justify-content: center;" class="anim-up anim-up-d4">
+      <div class="photo-placeholder" style="width: 140px; aspect-ratio: 1; border-radius: 50%; border-style: solid; border-width: 2px;">
+        <span class="ph-icon" style="font-size: 28px;">👤</span>
+        <span class="ph-label" style="font-size: 9px;">Team member 1</span>
+      </div>
+      <div class="photo-placeholder" style="width: 140px; aspect-ratio: 1; border-radius: 50%; border-style: solid; border-width: 2px;">
+        <span class="ph-icon" style="font-size: 28px;">👤</span>
+        <span class="ph-label" style="font-size: 9px;">Team member 2</span>
+      </div>
+      <div class="photo-placeholder" style="width: 140px; aspect-ratio: 1; border-radius: 50%; border-style: solid; border-width: 2px;">
+        <span class="ph-icon" style="font-size: 28px;">👤</span>
+        <span class="ph-label" style="font-size: 9px;">Team member 3</span>
+      </div>
+      <div class="photo-placeholder" style="width: 140px; aspect-ratio: 1; border-radius: 50%; border-style: solid; border-width: 2px;">
+        <span class="ph-icon" style="font-size: 28px;">👤</span>
+        <span class="ph-label" style="font-size: 9px;">Team member 4</span>
+      </div>
+    </div>
+
+    <span class="slide-number">12 / 12</span>
+  </div>
+
+</div>
+
+<!-- ─── Navigation Bar ─── -->
+<div class="nav-bar">
+  <button class="nav-btn" onclick="prevSlide()" title="Previous (← or ↑)">‹</button>
+  <div class="nav-dots" id="navDots"></div>
+  <button class="nav-btn" onclick="nextSlide()" title="Next (→ or ↓)">›</button>
+  <div class="nav-counter" id="navCounter">1 / 12</div>
+</div>
+
+<script>
+  const TOTAL_SLIDES = 12;
+  let currentSlide = 0;
+  let isTransitioning = false;
+
+  const slides = document.querySelectorAll('.slide');
+  const navDots = document.getElementById('navDots');
+  const navCounter = document.getElementById('navCounter');
+  const progressBar = document.getElementById('progressBar');
+
+  // Create navigation dots
+  for (let i = 0; i < TOTAL_SLIDES; i++) {
+    const dot = document.createElement('div');
+    dot.className = 'nav-dot' + (i === 0 ? ' active' : '');
+    dot.onclick = () => goToSlide(i);
+    navDots.appendChild(dot);
+  }
+
+  function updateUI() {
+    navCounter.textContent = `${currentSlide + 1} / ${TOTAL_SLIDES}`;
+    progressBar.style.width = `${((currentSlide + 1) / TOTAL_SLIDES) * 100}%`;
+
+    const dots = navDots.querySelectorAll('.nav-dot');
+    dots.forEach((dot, i) => {
+      dot.className = 'nav-dot' + (i === currentSlide ? ' active' : '');
+    });
+  }
+
+  function goToSlide(index, direction = null) {
+    if (isTransitioning || index === currentSlide || index < 0 || index >= TOTAL_SLIDES) return;
+    isTransitioning = true;
+
+    const prev = slides[currentSlide];
+    const next = slides[index];
+
+    if (direction === null) direction = index > currentSlide ? 'left' : 'right';
+
+    prev.classList.remove('active');
+    prev.classList.add(direction === 'left' ? 'exiting-left' : 'exiting-right');
+
+    // Reset animation classes on new slide
+    next.querySelectorAll('.anim-up').forEach(el => {
+      el.style.opacity = '0';
+      el.style.transform = 'translateY(30px)';
+    });
+
+    next.classList.add('active');
+
+    currentSlide = index;
+    updateUI();
+
+    setTimeout(() => {
+      prev.classList.remove('exiting-left', 'exiting-right');
+      // Trigger entrance animations
+      next.querySelectorAll('.anim-up').forEach(el => {
+        el.style.opacity = '';
+        el.style.transform = '';
+      });
+      isTransitioning = false;
+    }, 100);
+  }
+
+  function nextSlide() {
+    if (currentSlide < TOTAL_SLIDES - 1) goToSlide(currentSlide + 1, 'left');
+  }
+
+  function prevSlide() {
+    if (currentSlide > 0) goToSlide(currentSlide - 1, 'right');
+  }
+
+  // Keyboard navigation
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') {
+      e.preventDefault();
+      nextSlide();
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      prevSlide();
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      goToSlide(0);
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      goToSlide(TOTAL_SLIDES - 1);
+    } else if (e.key === 'f' || e.key === 'F') {
+      toggleFullscreen();
+    }
+  });
+
+  // Touch / swipe navigation
+  let touchStartX = 0;
+  let touchStartY = 0;
+
+  document.addEventListener('touchstart', (e) => {
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+  }, { passive: true });
+
+  document.addEventListener('touchend', (e) => {
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    const dy = e.changedTouches[0].clientY - touchStartY;
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50) {
+      if (dx < 0) nextSlide();
+      else prevSlide();
+    }
+  }, { passive: true });
+
+  function toggleFullscreen() {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {});
+    } else {
+      document.exitFullscreen().catch(() => {});
+    }
+  }
+
+  // Initialize
+  updateUI();
+</script>
+</body>
+</html>

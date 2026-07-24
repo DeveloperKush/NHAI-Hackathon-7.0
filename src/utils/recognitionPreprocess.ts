@@ -1,7 +1,5 @@
-import { fastPreprocessFromBase64WithStats, type PreprocessStats } from './imagePreProc';
+import { fastPreprocessFromBase64WithStats, type PreprocessStats, checkFrameQuality } from './imagePreProc';
 import { MIN_PREPROCESS_VARIANCE } from '../constants/config';
-import type { Landmark } from '../services/ai/liveness';
-import { checkFrameQuality } from './imagePreProc';
 
 export const RECOGNITION_INPUT_SIZE = 112;
 
