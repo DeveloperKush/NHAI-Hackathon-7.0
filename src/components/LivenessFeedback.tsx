@@ -38,7 +38,6 @@ export default function LivenessFeedback({ message, type, onDismiss }: LivenessF
       onPress={handlePress}
       style={[styles.banner, { backgroundColor }]}
       testID="liveness-feedback-banner"
-      pointerEvents="auto"
     >
       <View style={styles.content}>
         <Text style={styles.primaryText}>{message}</Text>
