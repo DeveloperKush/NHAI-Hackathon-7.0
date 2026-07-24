@@ -172,7 +172,7 @@ export async function processLivenessFrame(frame: CameraCapturedPicture): Promis
 /**
  * Fast nearest-neighbor crop and resize from 320x240 to 112x112.
  */
-export function fastResize112x112(
+export function fastResizeFloat32(
   src: Float32Array,
   srcW: number,
   srcH: number

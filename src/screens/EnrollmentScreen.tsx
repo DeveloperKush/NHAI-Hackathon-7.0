@@ -30,7 +30,6 @@ import {
 } from '../services/database/enrolledFaces';
 import LivenessFeedback from '../components/LivenessFeedback';
 import { Landmark } from '../services/ai/liveness';
-import { RECOGNITION_PICTURE_SIZE } from '../constants/camera';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -332,7 +331,7 @@ export default function EnrollmentScreen({ navigation }: EnrollmentScreenProps) 
                 ref={cameraRef}
                 style={styles.camera}
                 type={CameraType.front}
-                pictureSize={RECOGNITION_PICTURE_SIZE}
+                pictureSize="640x480"
               />
               {isCapturing && (
                 <View style={styles.loadingOverlay}>

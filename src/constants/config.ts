@@ -19,11 +19,6 @@ export const MIN_MATCH_RATIO = 1.08;
 /** Borderline band that triggers one extra retry capture. */
 export const BORDERLINE_RETRY_BAND = 0.03;
 
-export const THRESHOLD_RANGE = {
-  permissive: 0.85,
-  strict: 0.91,
-};
-
 /** Reject walls/ceilings (your ceiling runs ~0.015; faces ~0.18+). */
 export const MIN_PREPROCESS_VARIANCE = 0.05;
 

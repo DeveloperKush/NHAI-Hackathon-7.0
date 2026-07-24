@@ -6,7 +6,6 @@
 
 import {
   calculateEAR,
-  calculateMAR,
   calculateHeadYaw,
   checkDepthConsistency,
   getPromptForState,
@@ -64,10 +63,6 @@ function makeLandmarks(opts: {
   lm[234] = { x: 0.20,  y: 0.50, z: zVal };
   lm[454] = { x: 0.80,  y: 0.50, z: zVal };
 
-  // Smile helpers needed by calculateSmileScore (152=chin, 10=forehead)
-  lm[152] = { x: 0.50, y: 0.90, z: zVal };
-  lm[10]  = { x: 0.50, y: 0.10, z: zVal };
-
   return lm;
 }
 
@@ -91,26 +86,6 @@ describe('calculateEAR', () => {
   test('returns 0 when eye arrays are too short', () => {
     expect(calculateEAR([], [])).toBe(0);
     expect(calculateEAR([{ x: 0, y: 0, z: 0 }], [{ x: 0, y: 0, z: 0 }])).toBe(0);
-  });
-});
-
-describe('calculateMAR', () => {
-  test('returns low ratio for neutral lips (~0.2)', () => {
-    const lm = makeLandmarks({ lips: 'neutral' });
-    const lips = [61, 291, 13, 14].map(i => lm[i]);
-    // vertical = 2*0.02 = 0.04, horizontal = 0.20 → MAR = 0.04/0.20 = 0.2
-    expect(calculateMAR(lips)).toBeCloseTo(0.2, 2);
-  });
-
-  test('returns high ratio for wide-open mouth (>=1.0)', () => {
-    const lm = makeLandmarks({ lips: 'wide' });
-    const lips = [61, 291, 13, 14].map(i => lm[i]);
-    // vertical = 2*0.10 = 0.20, horizontal = 0.20 → MAR = 1.0
-    expect(calculateMAR(lips)).toBeCloseTo(1.0, 2);
-  });
-
-  test('returns 0 when fewer than 4 landmarks provided', () => {
-    expect(calculateMAR([{ x: 0, y: 0, z: 0 }])).toBe(0);
   });
 });
 

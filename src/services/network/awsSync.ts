@@ -37,7 +37,7 @@ export async function syncAuthLogs(): Promise<boolean> {
       return true;
     }
 
-    const url = AWS_SYNC_URL || process.env.EXPO_PUBLIC_AWS_SYNC_URL;
+    const url = AWS_SYNC_URL;
     if (!url) {
       console.error('AWS sync URL is not configured.');
       return false;

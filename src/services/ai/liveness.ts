@@ -50,86 +50,6 @@ export function calculateEAR(leftEye: Landmark[], rightEye: Landmark[]): number 
 }
 
 /**
- * Calculates Mouth Aspect Ratio (MAR) using lips coordinates.
- * Formula: |top-bottom| / |left-right|
- */
-export function calculateMAR(lips: Landmark[]): number {
-  if (lips.length < 4) return 0;
-  const left = lips[0];
-  const right = lips[1];
-  const top = lips[2];
-  const bottom = lips[3];
-
-  // Print raw y-coordinates of indices [61, 291, 13, 14]
-  console.log(`[MAR Debug] left.y=${left.y.toFixed(4)} right.y=${right.y.toFixed(4)} top.y=${top.y.toFixed(4)} bottom.y=${bottom.y.toFixed(4)}`);
-
-  // Print lip opening distance (hypot)
-  const openingDistance = Math.hypot(bottom.x - top.x, bottom.y - top.y);
-  console.log('[Liveness] lip opening distance:', openingDistance.toFixed(4));
-
-  const num = dist(top, bottom);
-  const den = dist(left, right);
-
-  return den === 0 ? 0 : num / den;
-}
-
-/**
- * Calculates a robust smile score using lip corner pull and mouth width expansion.
- */
-export function calculateSmileScore(
-  landmarks: Landmark[],
-  lips: Landmark[]
-): number {
-  if (IS_TEST) {
-    // In Jest tests, simulate smile score using mouth aspect ratio (MAR)
-    const left = lips[0] || landmarks[61];
-    const right = lips[1] || landmarks[291];
-    const top = lips[2] || landmarks[13];
-    const bottom = lips[3] || landmarks[14];
-    const num = dist(top, bottom);
-    const den = dist(left, right);
-    const mar = den === 0 ? 0 : num / den;
-    return mar * 0.5; // If mar = 1.0 (smile) -> score = 0.5 (>0.25). If mar = 0.2 (normal) -> score = 0.1 (<0.25).
-  }
-
-  // Method 1: Lip corner pull (reliable with MediaPipe)
-  const noseY = landmarks[1].y;  // Nose tip
-  const leftCornerY = landmarks[61].y;  // Left mouth corner
-  const rightCornerY = landmarks[291].y; // Right mouth corner
-
-  // Smile = corners pulled UP (y decreases in normalized coords)
-  const leftPull = noseY - leftCornerY;   // Positive = corner above nose level
-  const rightPull = noseY - rightCornerY;
-
-  // Average pull, normalized by face height
-  const faceHeight = Math.max(0.01, Math.abs(landmarks[152].y - landmarks[10].y)); // chin to forehead
-  const smileScore = ((leftPull + rightPull) / 2) / faceHeight;
-
-  // Method 2: Mouth width expansion (smile stretches horizontally)
-  const mouthWidth = Math.hypot(
-    landmarks[291].x - landmarks[61].x,
-    landmarks[291].y - landmarks[61].y
-  );
-  const faceWidth = Math.max(0.01, Math.hypot(
-    landmarks[454].x - landmarks[234].x, // right cheek to left cheek
-    landmarks[454].y - landmarks[234].y
-  ));
-  const widthRatio = mouthWidth / faceWidth;
-
-  // Debug log
-  console.log('[Liveness] Smile debug:',
-    'leftPull:', leftPull.toFixed(3),
-    'rightPull:', rightPull.toFixed(3),
-    'mouthWidth:', mouthWidth.toFixed(3),
-    'score:', smileScore.toFixed(3)
-  );
-  console.log('[SMILE TEST] Neutral face:', smileScore.toFixed(3));
-  console.log('[SMILE TEST] Big smile:', smileScore.toFixed(3));
-  // Return max of both methods
-  return Math.max(smileScore * 3, widthRatio * 2); // Scale to match threshold
-}
-
-/**
  * Calculates horizontal head yaw asymmetry based on nose and cheek positions.
  * Returns a signed float: negative = turned left, positive = turned right.
  * Formula: (dRight - dLeft) / (dLeft + dRight)
@@ -201,7 +121,6 @@ export class LivenessEngine {
   private currentChallengeIndex: number = 0;
   private state: LivenessState = 'READY';
   private consecutiveBlinkFrames: number = 0;
-  private consecutiveSmileFrames: number = 0;
   private consecutiveHeadTurnFrames: number = 0;
   private challengeStartTime: number | null = null;
   // START CHANGE: yaw smoothing state
@@ -227,7 +146,6 @@ export class LivenessEngine {
     this.currentChallengeIndex = 0;
     this.state = 'READY';
     this.consecutiveBlinkFrames = 0;
-    this.consecutiveSmileFrames = 0;
     this.consecutiveHeadTurnFrames = 0;
     this.challengeStartTime = null;
     // START CHANGE: reset yaw smoother
@@ -362,7 +280,6 @@ export class LivenessEngine {
     this.currentChallengeIndex = index;
     const challenge = this.challenges[index];
     this.consecutiveBlinkFrames = 0;
-    this.consecutiveSmileFrames = 0;
     this.consecutiveHeadTurnFrames = 0;
     this.challengeStartTime = Date.now();
     // START CHANGE: reset yaw smoother when entering a new challenge
@@ -372,8 +289,6 @@ export class LivenessEngine {
 
     if (challenge === Challenge.BLINK) {
       this.state = 'WAITING_BLINK';
-    } else if (challenge === Challenge.SMILE) {
-      this.state = 'WAITING_SMILE';
     } else if (challenge === Challenge.HEAD_TURN) {
       this.state = 'WAITING_HEAD_TURN';
     }

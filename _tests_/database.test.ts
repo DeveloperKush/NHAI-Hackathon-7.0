@@ -4,7 +4,7 @@
  * Uses an in-memory mock of expo-sqlite and react-native-encrypted-storage.
  */
 
-import { initDatabase } from '../src/services/database/sqlite';
+import { initializeDatabase } from '../src/services/database/sqlite';
 import {
   insertEnrolledFace,
   getAllEnrolledFaces,
@@ -104,7 +104,7 @@ jest.mock('react-native-encrypted-storage', () => ({
 // ─── Setup ───────────────────────────────────────────────────────────────────
 
 beforeAll(async () => {
-  await initDatabase();
+  await initializeDatabase();
 });
 
 beforeEach(() => {

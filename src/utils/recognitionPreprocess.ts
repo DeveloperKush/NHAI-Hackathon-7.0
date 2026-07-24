@@ -136,10 +136,4 @@ export async function captureAndPreprocessRecognition(cameraRef: {
   return preprocessRecognitionWithFaceGate(base64);
 }
 
-/** @deprecated Use preprocessRecognitionWithFaceGate — aligned path broke scores when EXIF mismatched. */
-export async function preprocessRecognitionAligned(
-  base64Str: string,
-  _landmarks: Landmark[] | null | undefined
-): Promise<PreprocessStats> {
-  return preprocessRecognitionWithFaceGate(base64Str);
-}
+

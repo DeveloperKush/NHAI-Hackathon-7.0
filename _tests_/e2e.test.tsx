@@ -11,7 +11,7 @@
  *   creation pipeline through the useAuth hook state machine.
  */
 
-import { initDatabase } from '../src/services/database/sqlite';
+import { initializeDatabase } from '../src/services/database/sqlite';
 import {
   insertEnrolledFace,
   getAllEnrolledFaces,
@@ -169,7 +169,7 @@ global.fetch = mockFetch as any;
 
 // ─── Setup ───────────────────────────────────────────────────────────────────
 
-beforeAll(async () => { await initDatabase(); });
+beforeAll(async () => { await initializeDatabase(); });
 
 beforeEach(() => {
   tables.enrolled_faces = {};

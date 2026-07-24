@@ -103,11 +103,6 @@ export function initializeDatabase(): Promise<void> {
   return initPromise;
 }
 
-// Keep initDatabase for backwards compatibility with tests
-export function initDatabase(): Promise<void> {
-  return initializeDatabase();
-}
-
 // Execute schema creation immediately on module load
 initializeDatabase().catch((err) => {
   console.error('Failed to initialize database schema immediately on module load:', err);
