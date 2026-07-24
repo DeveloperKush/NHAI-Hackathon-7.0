@@ -1,18 +1,130 @@
-# EdgeLock — NHAI Hackathon 7.0
-### Enterprise-Grade Offline-First Face Authentication & 3D Liveness Detection
+<p align="center">
+  <img src="assets/icon.png" alt="EdgeLock Logo" width="120" height="120" style="border-radius: 20px;" />
+</p>
 
-An enterprise-ready, offline-first facial authentication and secure logging solution engineered specifically for NHAI (National Highways Authority of India) field operations. Designed to function reliably in remote highway environments with zero network connectivity.
+<h1 align="center">🔐 EdgeLock</h1>
+<h3 align="center">Enterprise-Grade Offline-First Face Authentication & 3D Liveness Detection</h3>
 
-This repository features a unified React Native codebase targetable to both **Android** and **iOS** platforms, optimized for cloud-based compilation via **Expo Application Services (EAS)**, allowing development and build delivery from Windows/Linux hosts.
+<p align="center">
+  <img src="https://img.shields.io/badge/React_Native-0.73.6-61DAFB?style=for-the-badge&logo=react&logoColor=white" alt="React Native" />
+  <img src="https://img.shields.io/badge/Expo_SDK-50-000020?style=for-the-badge&logo=expo&logoColor=white" alt="Expo" />
+  <img src="https://img.shields.io/badge/TypeScript-Strict-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/TFLite-INT8-FF6F00?style=for-the-badge&logo=tensorflow&logoColor=white" alt="TensorFlow Lite" />
+  <img src="https://img.shields.io/badge/Platform-Android%20%7C%20iOS-green?style=for-the-badge" alt="Platforms" />
+  <img src="https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge" alt="License" />
+</p>
+
+<p align="center">
+  <strong>Built by Team Binary Brains for NHAI Hackathon 7.0</strong><br/>
+  An enterprise-ready, offline-first facial authentication and secure logging solution engineered specifically for <strong>NHAI (National Highways Authority of India)</strong> field operations. Designed to function reliably in remote highway environments with <strong>zero network connectivity</strong>.
+</p>
+
+<p align="center">
+  This repository features a unified React Native codebase targetable to both <strong>Android</strong> and <strong>iOS</strong> platforms, optimized for cloud-based compilation via <strong>Expo Application Services (EAS)</strong>, allowing development and build delivery from Windows/Linux hosts.
+</p>
 
 ---
 
-## Architecture Pipeline
+## 📑 Table of Contents
+
+- [App Demo & Screenshots](#-app-demo--screenshots)
+- [Architecture Pipeline](#-architecture-pipeline)
+- [Technical Stack](#-technical-stack)
+- [Project Structure](#-project-structure)
+- [Key Features & Implementations](#-key-features--implementations)
+- [Screens & Navigation](#-screens--navigation)
+- [Database Schemas](#-database-schemas)
+- [Configuration Constants](#-configuration-constants)
+- [Environment Variables](#-environment-variables)
+- [Setup & Installation](#-setup--installation)
+- [Running Verification & Tests](#-running-verification--tests)
+- [iOS Development & Testing](#-ios-development--testing-from-windowslinux)
+- [Android Development & Testing](#-android-development--testing)
+- [App Startup Sequence](#-app-startup-sequence)
+- [AWS Sync Protocol](#-aws-sync-protocol)
+- [Core Engineering Decisions](#-core-engineering-decisions)
+- [Available Scripts](#-available-scripts)
+- [Contributing](#-contributing)
+- [Team](#-team)
+- [License](#-license)
+
+---
+
+## 📱 App Demo & Screenshots
+
+> **📸 To add your demo screenshots:** Place your images in the [`demo/`](demo/) folder and update the paths below. Recommended image size: **360×780px** for phone screenshots or **1280×720px** for landscape/feature screenshots.
+
+### App Screens
+
+<p align="center">
+  <img src="demo/splash_screen.png" alt="Splash Screen" width="200" />
+  &nbsp;&nbsp;&nbsp;
+  <img src="demo/home_screen.png" alt="Home Screen" width="200" />
+  &nbsp;&nbsp;&nbsp;
+  <img src="demo/enrollment_screen.png" alt="Enrollment Screen" width="200" />
+  &nbsp;&nbsp;&nbsp;
+  <img src="demo/auth_screen.png" alt="Authentication Screen" width="200" />
+</p>
+<p align="center">
+  <em>Splash Screen → Home / Demo Auth → Face Enrollment → Authentication</em>
+</p>
+
+### Liveness Detection in Action
+
+<p align="center">
+  <img src="demo/liveness_blink.png" alt="Blink Detection" width="200" />
+  &nbsp;&nbsp;&nbsp;
+  <img src="demo/liveness_head_turn.png" alt="Head Turn Detection" width="200" />
+  &nbsp;&nbsp;&nbsp;
+  <img src="demo/liveness_passed.png" alt="Liveness Passed" width="200" />
+</p>
+<p align="center">
+  <em>Blink Challenge → Head Turn Challenge → Liveness Passed</em>
+</p>
+
+### Authentication Results
+
+<p align="center">
+  <img src="demo/auth_success.png" alt="Authentication Success" width="200" />
+  &nbsp;&nbsp;&nbsp;
+  <img src="demo/auth_failed.png" alt="Authentication Failed" width="200" />
+  &nbsp;&nbsp;&nbsp;
+  <img src="demo/sync_status.png" alt="Sync Status" width="200" />
+</p>
+<p align="center">
+  <em>Auth Success → Auth Failed → Cloud Sync Status</em>
+</p>
+
+### Feature Highlights
+
+| Feature | Description |
+|---------|-------------|
+| 🔒 **Offline-First** | Works with zero network connectivity in remote highway areas |
+| 🧠 **3D Liveness Detection** | Multi-factor anti-spoofing: blink, head turn, 3D depth analysis |
+| 🎯 **GhostFaceNet INT8** | On-device neural inference (~1 MB model, 512-dim embeddings) |
+| 🔐 **AES-256 Encryption** | Hardware-backed encrypted storage for biometric data |
+| 📡 **Zero-Loss Sync** | Guaranteed log delivery with transactional cloud sync |
+| 📍 **Geo-Tagged Logs** | GPS coordinates attached to every authentication event |
+| ⚡ **CLAHE Preprocessing** | Adaptive lighting normalization for outdoor highway conditions |
+| 📐 **5-Point Face Alignment** | Similarity transform to canonical 112×112 pose before inference |
+
+> **💡 Tip:** To add a demo video/GIF, place it in `demo/` and embed it like:
+> ```markdown
+> <p align="center">
+>   <img src="demo/app_walkthrough.gif" alt="App Walkthrough" width="300" />
+> </p>
+> ```
+
+---
+
+## 🏗️ Architecture Pipeline
+
 ```
 Camera Feed ➔ MediaPipe Face Mesh (Liveness WebView) ➔ JPEG Decode (jpeg-js) ➔ Face Alignment (CLAHE) ➔ GhostFaceNet INT8 Embedding ➔ Cosine Similarity Matching (SQLite) ➔ Encrypted Local Logging ➔ AWS Sync Queue
 ```
 
 ### Detailed Authentication Flow
+
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │  1. SCANNING      │ Camera captures low-res JPEG every ~100ms              │
@@ -29,26 +141,63 @@ Camera Feed ➔ MediaPipe Face Mesh (Liveness WebView) ➔ JPEG Decode (jpeg-js)
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
+### High-Level System Architecture
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│                        EdgeLock Mobile App                           │
+│                                                                      │
+│  ┌──────────┐  ┌──────────────┐  ┌────────────────┐                 │
+│  │  Camera   │→│  MediaPipe   │→│  GhostFaceNet  │                 │
+│  │  Module   │  │  WebView     │  │  TFLite INT8   │                 │
+│  │ (640×480) │  │  (468 pts)   │  │  (112×112 in)  │                 │
+│  └──────────┘  └──────────────┘  └───────┬────────┘                 │
+│                                          │                           │
+│                                   512-dim embedding                  │
+│                                          │                           │
+│  ┌──────────────────────────────────────┐│                           │
+│  │         Encrypted SQLite DB          ││                           │
+│  │  ┌──────────────┐ ┌──────────────┐  │▼                           │
+│  │  │ enrolled_faces│ │  auth_logs   │←── Cosine Similarity Match   │
+│  │  │ (AES-256 CBC)│ │ (GPS tagged) │  │                           │
+│  │  └──────────────┘ └──────┬───────┘  │                           │
+│  └──────────────────────────┼──────────┘                           │
+│                              │                                       │
+│                    ┌─────────▼─────────┐                            │
+│                    │  AWS Sync Queue   │                            │
+│                    │ (Zero-Loss Purge) │                            │
+│                    └─────────┬─────────┘                            │
+└──────────────────────────────┼──────────────────────────────────────┘
+                               │
+                    ┌──────────▼──────────┐
+                    │   AWS Cloud / Mock  │
+                    │   Sync Endpoint     │
+                    └─────────────────────┘
+```
+
 ---
 
-## Technical Stack
-* **Core Framework**: Expo SDK 50 (~50.0.14) + React Native 0.73.6
-* **Language**: TypeScript (Strict Mode)
-* **Local Database**: `expo-sqlite` (Relational SQL engine utilizing system SQLite)
-* **Security & Key Management**: `react-native-encrypted-storage` (Hardware-backed iOS Keychain / Android Keystore) + AES-256 (`crypto-js`)
-* **Neural Network Inference**: `react-native-fast-tflite` (High-performance JSI / C++ runtime wrapper)
-* **On-Device Model**: GhostFaceNet INT8 Quantized (~1 MB, 512-dimensional unit L2-normalized embeddings)
-* **Liveness WebView**: `react-native-webview` (WKWebView on iOS / System WebView on Android) running MediaPipe Face Mesh WebAssembly (WASM)
-* **Image Processor**: Pure JS JPEG decoder (`jpeg-js`) + raw canvas manipulation
-* **Navigation**: `@react-navigation/stack` + `@react-navigation/native`
-* **Camera**: `expo-camera` (Front-facing, 640×480 picture size)
-* **Location**: `expo-location` (Balanced accuracy GPS for auth log geo-tagging)
-* **Haptics**: `expo-haptics` (Light/Heavy impact + error notification feedback)
-* **Connectivity Monitor**: `@react-native-community/netinfo` (Real-time online/offline detection)
-* **Persistent Key-Value Store**: `@react-native-async-storage/async-storage` (Last sync timestamp)
-* **Local Dev Mock Server**: Express 4 (`mock-aws-server/`)
+## 🛠️ Technical Stack
 
-### Full Dependencies
+| Category | Technology | Details |
+|----------|-----------|---------|
+| **Core Framework** | Expo SDK 50 + React Native 0.73.6 | Unified cross-platform codebase |
+| **Language** | TypeScript (Strict Mode) | Full type safety across the entire codebase |
+| **Local Database** | `expo-sqlite` | Relational SQL engine utilizing system SQLite |
+| **Security** | `react-native-encrypted-storage` + AES-256 | Hardware-backed iOS Keychain / Android Keystore |
+| **Neural Inference** | `react-native-fast-tflite` (JSI/C++) | Synchronous model execution via JSI bridge |
+| **On-Device Model** | GhostFaceNet INT8 (~1 MB) | 512-dimensional unit L2-normalized embeddings |
+| **Liveness Engine** | MediaPipe Face Mesh (WASM) | 468 3D face landmarks via WebView |
+| **Image Processing** | `jpeg-js` + CLAHE | Pure JS decoder + adaptive histogram equalization |
+| **Navigation** | React Navigation (Stack) | Stack-based screen transitions |
+| **Camera** | `expo-camera` | Front-facing, 640×480 capture |
+| **Location** | `expo-location` | Balanced accuracy GPS for geo-tagging |
+| **Haptics** | `expo-haptics` | Cross-platform tactile feedback |
+| **Network** | `@react-native-community/netinfo` | Real-time online/offline detection |
+| **Mock Server** | Express 4 | Local dev sync endpoint |
+
+<details>
+<summary><strong>📦 Full Dependencies Table</strong></summary>
 
 | Package | Version | Purpose |
 |---|---|---|
@@ -76,7 +225,10 @@ Camera Feed ➔ MediaPipe Face Mesh (Liveness WebView) ➔ JPEG Decode (jpeg-js)
 | `base-64` | ^1.0.0 | Base64 encode/decode for React Native |
 | `uuid` | ^9.0.1 | UUID generation for log entries |
 
-### Dev Dependencies
+</details>
+
+<details>
+<summary><strong>🔧 Dev Dependencies Table</strong></summary>
 
 | Package | Version | Purpose |
 |---|---|---|
@@ -91,9 +243,11 @@ Camera Feed ➔ MediaPipe Face Mesh (Liveness WebView) ➔ JPEG Decode (jpeg-js)
 | `@types/crypto-js` | ^4.2.2 | CryptoJS type definitions |
 | `@types/base-64` | ^1.0.2 | Base-64 type definitions |
 
+</details>
+
 ---
 
-## Project Structure
+## 📁 Project Structure
 
 ```
 NHAI-Hackathon-7.0/
@@ -154,6 +308,12 @@ NHAI-Hackathon-7.0/
 │       ├── face_mesh_solution_simd_wasm_bin_js.bin           # SIMD JS glue (330 KB)
 │       ├── face_mesh_solution_wasm_bin.wasm                  # Non-SIMD WASM fallback (5.8 MB)
 │       └── face_mesh_solution_wasm_bin_js.bin                # Non-SIMD JS glue (330 KB)
+├── demo/                           # 📸 App demo screenshots & recordings
+│   └── (add your screenshots here)
+├── documents/
+│   ├── DEMO_GUIDE.pdf              # Demo walkthrough guide
+│   ├── EdgeLock_Presentation.pptx  # Hackathon presentation
+│   └── presentation.html           # Web-based presentation
 ├── _tests_/
 │   ├── database.test.ts            # SQLite schema, insert, query, delete
 │   ├── liveness.test.ts            # EAR, MAR, yaw, depth, LivenessEngine state machine
@@ -184,13 +344,13 @@ NHAI-Hackathon-7.0/
 
 ---
 
-## Key Features & Implementations
+## ⭐ Key Features & Implementations
 
-### 1. Robust TypeScript Contracts & Type System
+### 1. 🧾 Robust TypeScript Contracts & Type System
 * Strict domain models defined in `src/types/index.ts`.
 * Stable data structures for authentication logging (`AuthLog`), liveness error payloads (`LivenessError`), and component configuration parameters.
 
-### 2. Multi-Factor 3D Liveness Detection
+### 2. 🧠 Multi-Factor 3D Liveness Detection
 To prevent biometric spoofing (e.g., using a photo or video displayed on a mobile device):
 * **Eye Aspect Ratio (EAR)**: Computes eye contours in real-time to detect active blinks.
 * **Mouth Aspect Ratio (MAR)**: Monitors mouth movement gestures.
@@ -209,21 +369,21 @@ READY → WAITING_BLINK → WAITING_HEAD_TURN → PASSED
 * **Yaw smoothing**: A rolling window of 5 frames with hysteresis (ON threshold = 0.12, OFF threshold = 0.09) prevents flicker in head turn detection.
 * **Blink detection**: A single frame with EAR < 0.33 is sufficient (landmarks are sampled ~every 300ms).
 
-### 3. iOS-Specific WKWebView Sandboxing
+### 3. 🍏 iOS-Specific WKWebView Sandboxing
 * **Local Origin Bypass**: WKWebView blocks default `file://` fetch requests. This codebase patches fetch with an XMLHTTPRequest polyfill and utilizes local documents caching.
 * **Directory Read Permission**: Configures `allowingReadAccessToURL` pointing to the MediaPipe local documents directory. This allows the WebView to load sibling scripts (`face_mesh.js`) and WASM modules within the sandbox without CORS or origin blocks.
 
-### 4. Advanced Lighting Preprocessing (CLAHE)
+### 4. 🌤️ Advanced Lighting Preprocessing (CLAHE)
 * Outdoors on national highways, glare and dark shadows cause biometric mismatching.
 * The preprocessing pipeline implements **CLAHE (Contrast Limited Adaptive Histogram Equalization)** in 8x8 tiles combined with bilinear interpolation. This normalizes lighting and shadows before resizing the target face to the model's standard 112x112 grayscale input.
 * **Adaptive strategy**: If mean brightness is extreme (< 30 or > 225), CLAHE is applied independently per RGB channel. Otherwise, global histogram equalization is used for speed.
 
-### 5. Encrypted SQLite Registry & Log Queue
+### 5. 🔐 Encrypted SQLite Registry & Log Queue
 * Enrolled user embeddings are encrypted using AES-256-CBC and stored in `expo-sqlite`.
 * Authentication logs are queued locally. When network connectivity transitions to online (monitored via `@react-native-community/netinfo`), a background sync worker batches logs to the AWS endpoint.
 * **Zero-Loss Purge Rule**: Client logs are deleted locally only after the server responds with HTTP 200 containing the processed transaction log IDs.
 
-### 6. 5-Point Similarity Transform Face Alignment
+### 6. 📐 5-Point Similarity Transform Face Alignment
 * Before embedding extraction, the face is **warped to a canonical 112×112 pose** using a similarity transform computed from 5 MediaPipe landmarks:
   - Left eye outer corner (landmark 33)
   - Right eye outer corner (landmark 362)
@@ -233,7 +393,7 @@ READY → WAITING_BLINK → WAITING_HEAD_TURN → PASSED
 * The transform is computed via centroid alignment → least-squares rotation/scale → inverse bilinear warp.
 * If landmarks are unavailable, a **center-crop + bilinear resize** fallback is used.
 
-### 7. Quality Gate System
+### 7. ✅ Quality Gate System
 * Before enrollment frames are accepted, they pass through a multi-stage quality gate:
   - **Face detection confidence**: ≥ 0.85 (from MediaPipe detection score)
   - **Brightness check**: Mean luminance must be between 30 and 240
@@ -241,7 +401,7 @@ READY → WAITING_BLINK → WAITING_HEAD_TURN → PASSED
   - **Preprocess variance gate**: Normalized pixel variance must exceed 0.05 (rejects walls/ceilings/blank scenes)
 * Enrollment auto-retries up to 3 times if quality gates fail.
 
-### 8. Multi-User Recognition Algorithm
+### 8. 🎯 Multi-User Recognition Algorithm
 The matching algorithm in `findBestMatch()` implements a sophisticated decision tree:
 * **High confidence fast path** (any enrollment count): Score ≥ 0.91 → accept immediately.
 * **Single-user path**: Score ≥ 0.75 → accept. Borderline scores (within 0.03 of threshold) trigger one extra retry capture.
@@ -250,37 +410,37 @@ The matching algorithm in `findBestMatch()` implements a sophisticated decision 
   - **Ratio check**: Best/second ratio ≥ 1.08 (prevents impostor acceptance ~1.076)
 * **3-shot averaging**: Authentication extracts 3 embeddings 180ms apart and averages them (L2-normalized) for lighting/pose stability.
 
-### 9. GhostFaceNet INT8 Quantization Pipeline
+### 9. 🧬 GhostFaceNet INT8 Quantization Pipeline
 * **Input quantization**: Float [-1.0, 1.0] → INT8 via `scale = 0.0078125 (1/128), zero_point = -1`
 * **Output dequantization**: INT8 → Float via `scale = 0.1412736475467682, zero_point = 24`
 * **Grayscale expansion**: If input is 112×112 grayscale (12,544 values), it's expanded to 112×112×3 RGB (37,632 values) by replicating the channel.
 * **Synchronous inference**: Uses `model.runSync()` for deterministic, bridge-free execution via JSI.
 
-### 10. MediaPipe Asset Caching & WebView Bridge
+### 10. 📦 MediaPipe Asset Caching & WebView Bridge
 * On first launch, all 8 MediaPipe Face Mesh assets (~16 MB total) are extracted from the app bundle to the device's local documents directory using `expo-file-system`.
 * The `face_mesh.binarypb` graph definition (939 bytes) is **inlined as a base64 blob URL** directly into the HTML template to avoid XHR for this file.
 * A **fetch polyfill** (XHR-based) intercepts all `file://` fetch calls in the WebView, working around Chromium's security policy that blocks the Fetch API on `file://` origins.
 * Frame processing is **de-bounced**: if the WebView is still computing a previous frame, new frames are dropped to prevent stacking.
 * A **warm-up frame** (1×1 transparent GIF) is sent immediately after initialization to pre-load WASM modules before the first real frame.
 
-### 11. Haptic Feedback System
+### 11. 📳 Haptic Feedback System
 * **Light impact**: On each liveness challenge prompt change
 * **Heavy impact**: On successful authentication
 * **Error notification**: On authentication failure
 * Uses `expo-haptics` for cross-platform tactile feedback.
 
-### 12. Crypto Polyfill for Hermes/JSC
+### 12. 🔑 Crypto Polyfill for Hermes/JSC
 * React Native's Hermes and JavaScriptCore engines lack `global.crypto.getRandomValues()`.
 * A polyfill in `src/utils/cryptoPolyfill.ts` provides this API using `Math.random()` so that `crypto-js` AES operations work correctly.
 * This polyfill is imported at the very top of `src/App.tsx` before any other module.
 
-### 13. Demo Mode
+### 13. 🎮 Demo Mode
 * The `DEMO_MODE` flag in `src/constants/config.ts` enables development/demo features.
 * Should be set to `false` before production deployment.
 
 ---
 
-## Screens & Navigation
+## 📲 Screens & Navigation
 
 The app uses `@react-navigation/stack` with two screens:
 
@@ -299,7 +459,7 @@ The app uses `@react-navigation/stack` with two screens:
 
 ---
 
-## Database Schemas
+## 🗄️ Database Schemas
 
 ### Enrolled Faces (`enrolled_faces`)
 | Column | Type | Description |
@@ -323,7 +483,7 @@ The app uses `@react-navigation/stack` with two screens:
 
 ---
 
-## Configuration Constants
+## ⚙️ Configuration Constants
 
 All tunable parameters are centralized in `src/constants/config.ts`:
 
@@ -341,16 +501,19 @@ All tunable parameters are centralized in `src/constants/config.ts`:
 | `DEMO_MODE` | true | Enable demo features (flip to false for production) |
 | `AWS_SYNC_URL` | env or fallback | Sync endpoint URL |
 
-Liveness constants in `src/constants/liveness.ts`:
+<details>
+<summary><strong>Liveness constants (<code>src/constants/liveness.ts</code>)</strong></summary>
 
 | Constant | Value | Description |
 |---|---|---|
 | `EAR_THRESHOLD` | 0.33 | Eye Aspect Ratio threshold for blink detection |
 | `HEAD_YAW_THRESHOLD` | 0.12 | Head yaw threshold for turn detection |
 
+</details>
+
 ---
 
-## Environment Variables
+## 🔑 Environment Variables
 
 Copy `.env.example` to `.env` and configure:
 
@@ -362,7 +525,7 @@ If not set, the app falls back to the deployed Render URL: `https://binary-brain
 
 ---
 
-## Metro Bundler Configuration
+## 📦 Metro Bundler Configuration
 
 The Metro config (`metro.config.js`) extends Expo's default configuration and registers custom asset extensions:
 
@@ -374,7 +537,7 @@ This allows Metro to bundle TensorFlow Lite models, WebAssembly binaries, packed
 
 ---
 
-## EAS Build & Platform Configuration (No Local Mac Required)
+## ☁️ EAS Build & Platform Configuration (No Local Mac Required)
 
 The project leverages Continuous Native Generation (CNG). The native directories (`/ios`, `/android`) are ignored by Git. EAS Build compiles the application on cloud macOS builders.
 
@@ -399,34 +562,40 @@ To ensure compatibility with JSI native modules and expedite cloud builds, Flipp
 
 ---
 
-## Setup & Installation
+## 🚀 Setup & Installation
 
 ### Prerequisites
 * Node.js 18+ and npm
 * Expo CLI (`npm install -g expo-cli` or use `npx`)
 * EAS CLI (`npm install -g eas-cli`) — for cloud builds only
 
-### 1. Install Dependencies
+### 1. Clone the Repository
+```bash
+git clone https://github.com/DeveloperKush/NHAI-Hackathon-7.0.git
+cd NHAI-Hackathon-7.0
+```
+
+### 2. Install Dependencies
 ```bash
 npm install
 ```
 
-### 2. Configure Environment
+### 3. Configure Environment
 ```bash
 cp .env.example .env
 # Edit .env if needed (default points to localhost:3001)
 ```
 
-### 3. Start Development Server
+### 4. Start Development Server
 ```bash
 npx expo start
 ```
 
-> **Note**: This app contains custom C++ native JSI modules (`react-native-fast-tflite`) and therefore **cannot run in the standard Expo Go client**. You must build a custom development client (see iOS/Android sections below).
+> **⚠️ Note**: This app contains custom C++ native JSI modules (`react-native-fast-tflite`) and therefore **cannot run in the standard Expo Go client**. You must build a custom development client (see iOS/Android sections below).
 
 ---
 
-## Running Verification & Tests
+## ✅ Running Verification & Tests
 
 ### 1. Compile & Typecheck
 Ensure zero TypeScript compilation errors:
@@ -454,11 +623,15 @@ npm test
 | `authOrchestration.test.tsx` | Full `useAuth` hook pipeline: scanning → liveness → matching → authenticated/failed |
 | `e2e.test.tsx` | End-to-end pipeline simulation with mock camera, WebView, and database |
 
-#### Test Configuration
+<details>
+<summary><strong>Test Configuration Details</strong></summary>
+
 * **Preset**: `react-native`
 * **Setup file**: `jest.setup.js` (mocks `react-native-webview`)
 * **Module mocks**: `@react-native-async-storage/async-storage` via `__mocks__/` directory
 * **Transform ignore**: Standard Expo/RN packages are excluded from transformation
+
+</details>
 
 ### 3. Run Mock AWS Server
 Starts the Express mock server locally to test logs batch syncing:
@@ -472,16 +645,21 @@ node server.js
   - Returns: `{ status: "ok", uptime: <seconds>, logs_received: <count> }`
 * **Idempotency**: Duplicate `log_id` values are acknowledged (HTTP 200) but not re-processed.
 * **Purge Protocol**: Client only purges local logs after receiving HTTP 200 with matching `received_logs` array.
-* Test locally using Curl:
-  ```bash
-  curl -X POST http://localhost:3001/api/sync \
-    -H "Content-Type: application/json" \
-    -d '{"logs":[{"log_id":"test-1","user_id":"u1","timestamp":"2026-05-25T10:00:00Z","gps_lat":12.97,"gps_lng":77.59,"device_id":"d1","similarity_score":0.85,"photo_thumb":"data:image/jpeg;base64,abc123"}]}'
-  ```
+
+<details>
+<summary><strong>Test with Curl</strong></summary>
+
+```bash
+curl -X POST http://localhost:3001/api/sync \
+  -H "Content-Type: application/json" \
+  -d '{"logs":[{"log_id":"test-1","user_id":"u1","timestamp":"2026-05-25T10:00:00Z","gps_lat":12.97,"gps_lng":77.59,"device_id":"d1","similarity_score":0.85,"photo_thumb":"data:image/jpeg;base64,abc123"}]}'
+```
+
+</details>
 
 ---
 
-## Step-by-Step iOS Development & Testing (from Windows/Linux)
+## 🍎 iOS Development & Testing (from Windows/Linux)
 
 Since this app contains custom C++ native JSI modules (`react-native-fast-tflite`), it cannot run in the standard Expo Go client. You must build a custom development client.
 
@@ -525,7 +703,7 @@ Since this app contains custom C++ native JSI modules (`react-native-fast-tflite
 
 ---
 
-## Android Development & Testing
+## 🤖 Android Development & Testing
 
 ### Local Android Build (Requires Android SDK)
 ```bash
@@ -545,13 +723,24 @@ eas build --platform android --profile development
 
 ---
 
-## App Startup Sequence
+## 🔄 App Startup Sequence
 
 On launch, `src/App.tsx` performs a 3-stage initialization with a **10-second hard timeout**:
 
-1. **Stage 1/3 — Database**: `initializeDatabase()` creates `enrolled_faces` and `auth_logs` tables if they don't exist.
-2. **Stage 2/3 — TFLite Model**: `initRecognitionModel()` loads the GhostFaceNet INT8 model via `react-native-fast-tflite` JSI bridge.
-3. **Stage 3/3 — MediaPipe Assets**: `ensureMediaPipeAssets()` copies 8 bundled WASM/data files to the device's documents directory and writes the `index.html` template.
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Stage 1/3 — Database                                           │
+│  initializeDatabase() creates enrolled_faces and auth_logs      │
+│  tables if they don't exist                                     │
+├─────────────────────────────────────────────────────────────────┤
+│  Stage 2/3 — TFLite Model                                       │
+│  initRecognitionModel() loads GhostFaceNet INT8 via JSI bridge  │
+├─────────────────────────────────────────────────────────────────┤
+│  Stage 3/3 — MediaPipe Assets                                   │
+│  ensureMediaPipeAssets() copies 8 WASM/data files to documents  │
+│  + writes index.html template                                   │
+└─────────────────────────────────────────────────────────────────┘
+```
 
 A hidden WebView is mounted at the root level (0×0 pixels, opacity 0) to host the MediaPipe Face Mesh runtime. This WebView persists across navigation and sends a `"ready"` message once WASM is loaded and warm-up inference completes.
 
@@ -559,7 +748,7 @@ If any stage fails or times out, the app displays a red error screen with the fa
 
 ---
 
-## AWS Sync Protocol
+## ☁️ AWS Sync Protocol
 
 ### Safety Rules (Zero-Loss Guarantee)
 1. **Never purge** unless HTTP 200 AND `received_logs` is a non-empty array.
@@ -575,18 +764,21 @@ If any stage fails or times out, the app displays a red error screen with the fa
 
 ---
 
-## Core Engineering Decisions
-* **JSI & Fast TFLite Integration**: Bypasses the standard React Native bridge, allowing synchronous model invocation (`model.runSync()`) from the JS thread directly to the C++ TensorFlow Lite library, achieving desktop-grade performance on mobile.
-* **WKWebView File Access Integration**: Overcomes WebKit sandboxing by copying assets to the application's local documents directory and setting the specific `allowingReadAccessToURL` attribute on initialization.
-* **Zero-Loss Syncing Queue**: Protects database logs using transactional operations. Logs are marked as synced but never purged from local storage until the server returns an HTTP 200 with matching logs payload confirmation.
-* **3-Shot Embedding Averaging**: Captures 3 photos 180ms apart during authentication and averages their L2-normalized embeddings to mitigate lighting/pose variance in outdoor highway environments.
-* **XHR Fetch Polyfill**: Android System WebView blocks native `fetch()` from `file://` origins (Chromium security policy), but allows `XMLHttpRequest` to `file://` with `allowFileAccess=true`. The polyfill transparently intercepts all local fetch calls and routes them through XHR.
-* **De-bounced WebView Frame Processing**: Prevents multiple `injectJavaScript` calls from stacking up in the WebView bridge. If the previous frame is still being processed, new frames are silently dropped.
-* **Cooperative Multitasking via `yieldToThread()`**: Heavy pixel processing loops (CLAHE, bilinear warp, normalization) yield back to the JS event loop every 16 rows/tiles using `setImmediate` / `setTimeout(0)` to prevent UI freezing.
+## 🧩 Core Engineering Decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| **JSI & Fast TFLite** | Bypasses the React Native bridge for synchronous C++ model invocation (`model.runSync()`), achieving desktop-grade inference performance on mobile |
+| **WKWebView File Access** | Overcomes WebKit sandboxing by copying assets to documents directory and setting `allowingReadAccessToURL` |
+| **Zero-Loss Sync Queue** | Transactional operations ensure logs are never purged until server confirms receipt via HTTP 200 |
+| **3-Shot Embedding Averaging** | Captures 3 photos 180ms apart and averages L2-normalized embeddings to mitigate lighting/pose variance in outdoor highway environments |
+| **XHR Fetch Polyfill** | Android System WebView blocks `fetch()` from `file://` origins but allows `XMLHttpRequest` with `allowFileAccess=true` |
+| **De-bounced WebView Frames** | Prevents `injectJavaScript` call stacking; drops frames while previous is still processing |
+| **Cooperative Multitasking** | Heavy pixel loops (CLAHE, warp, normalization) yield every 16 rows/tiles via `setImmediate`/`setTimeout(0)` to prevent UI freezing |
 
 ---
 
-## Available Scripts
+## 📜 Available Scripts
 
 | Script | Command | Description |
 |---|---|---|
@@ -600,5 +792,30 @@ If any stage fails or times out, the app displays a red error screen with the fa
 
 ---
 
-## Team
-**Binary Brains** — NHAI Hackathon 7.0
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+---
+
+## 👥 Team
+
+**Team Binary Brains** — NHAI Hackathon 7.0
+
+Built with ❤️ for India's National Highway infrastructure
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+---
+
+<p align="center">
+  <strong>🔐 EdgeLock — Securing India's Highways, One Face at a Time</strong>
+</p>
