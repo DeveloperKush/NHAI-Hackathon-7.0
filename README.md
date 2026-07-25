@@ -452,7 +452,7 @@ The app uses `@react-navigation/stack` with two screens:
 * Last sync timestamp display
 
 ### EnrollmentScreen
-* Multi-capture face enrollment workflow (5 sequential JPEG captures with 150ms intervals)
+* Multi-capture face enrollment workflow (3 sequential JPEG captures with 150ms intervals)
 * Quality gate validation on each capture
 * Embedding averaging across captures for robust enrollment
 * AES-256 encrypted storage of averaged embedding in SQLite

@@ -17,6 +17,8 @@ export default function FaceAuthenticator({
   similarityThreshold = SIMILARITY_THRESHOLD,
   autoStart = true,
   startTrigger = 0,
+  stopTrigger = 0,
+  onStatusChange,
 }: FaceAuthenticatorProps) {
   const cameraRef = useRef<any>(null);
   const IS_TEST = typeof (global as any).jest !== 'undefined' || process.env.NODE_ENV === 'test';
@@ -30,6 +32,19 @@ export default function FaceAuthenticator({
     onLivenessFailed,
     onEnrollmentRequired,
   });
+
+  // Notify parent of status changes
+  useEffect(() => {
+    onStatusChange?.(status);
+  }, [status, onStatusChange]);
+
+  // Handle manual stop trigger from parent
+  useEffect(() => {
+    if (stopTrigger > 0) {
+      authStartedRef.current = false;
+      reset();
+    }
+  }, [stopTrigger]);
 
 
 

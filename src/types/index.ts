@@ -23,4 +23,6 @@ export interface FaceAuthenticatorProps {
   similarityThreshold?: number; // default 0.6
   autoStart?: boolean;
   startTrigger?: number;
+  stopTrigger?: number;
+  onStatusChange?: (status: 'idle' | 'scanning' | 'liveness' | 'matching' | 'authenticated' | 'failed') => void;
 }

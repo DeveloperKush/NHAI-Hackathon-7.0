@@ -34,6 +34,9 @@ export default function DemoAuthScreen({ navigation }: DemoAuthScreenProps) {
   const [isSyncing, setIsSyncing] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [startTrigger, setStartTrigger] = useState(0);
+  const [stopTrigger, setStopTrigger] = useState(0);
+  const [authStatus, setAuthStatus] = useState<string>('idle');
+  const isAuthorizing = authStatus === 'scanning' || authStatus === 'liveness' || authStatus === 'matching';
 
   // Sync status state
   const [unsyncedCount, setUnsyncedCount] = useState(0);
@@ -46,6 +49,8 @@ export default function DemoAuthScreen({ navigation }: DemoAuthScreenProps) {
     useCallback(() => {
       setRefreshKey((k) => k + 1);
       setStartTrigger(0);
+      setStopTrigger(0);
+      setAuthStatus('idle');
       refreshSyncStatus();
       return () => {};
     }, [])
@@ -144,6 +149,13 @@ export default function DemoAuthScreen({ navigation }: DemoAuthScreenProps) {
     setStartTrigger((prev) => prev + 1);
   };
 
+  const handleStop = () => {
+    setStopTrigger((prev) => prev + 1);
+    setAuthStatus('idle');
+    setToastType('warning');
+    setToastMessage('Verification stopped.');
+  };
+
   const formatTime = (isoString: string) => {
     try {
       return new Date(isoString).toLocaleTimeString([], {
@@ -226,6 +238,8 @@ export default function DemoAuthScreen({ navigation }: DemoAuthScreenProps) {
               key={refreshKey}
               autoStart={false}
               startTrigger={startTrigger}
+              stopTrigger={stopTrigger}
+              onStatusChange={setAuthStatus}
               onAuthSuccess={handleAuthSuccess}
               onLivenessFailed={handleLivenessFailed}
               onEnrollmentRequired={handleEnrollmentRequired}
@@ -265,12 +279,30 @@ export default function DemoAuthScreen({ navigation }: DemoAuthScreenProps) {
         {/* Controls */}
         <View style={styles.controlsContainer}>
           <TouchableOpacity
-            style={styles.verifyButton}
+            style={[styles.verifyButton, isAuthorizing && styles.verifyButtonDisabled]}
             onPress={handleVerify}
+            disabled={isAuthorizing}
             testID="verify-button"
           >
-            <Text style={styles.verifyButtonText}>Verify</Text>
+            {isAuthorizing ? (
+              <View style={styles.verifyingContent}>
+                <ActivityIndicator size="small" color="#ffffff" />
+                <Text style={styles.verifyButtonText}>Verifying…</Text>
+              </View>
+            ) : (
+              <Text style={styles.verifyButtonText}>Verify</Text>
+            )}
           </TouchableOpacity>
+
+          {isAuthorizing && (
+            <TouchableOpacity
+              style={styles.stopButton}
+              onPress={handleStop}
+              testID="stop-button"
+            >
+              <Text style={styles.stopButtonText}>Stop Verification</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Recent Logs */}
@@ -451,6 +483,28 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   verifyButtonText: {
+    color: '#ffffff',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  verifyButtonDisabled: {
+    backgroundColor: '#9e9e9e',
+    opacity: 0.85,
+  },
+  verifyingContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  stopButton: {
+    backgroundColor: '#d32f2f',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stopButtonText: {
     color: '#ffffff',
     fontWeight: 'bold',
     fontSize: 16,
