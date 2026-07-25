@@ -52,7 +52,7 @@
 
 ## 📱 App Demo & Screenshots
 
-> **📸 To add your demo screenshots:** Place your images in the [`demo/`](demo/) folder and update the paths below. Recommended image size: **360×780px** for phone screenshots or **1280×720px** for landscape/feature screenshots.
+> **📸** Screenshots below. Image size: **360×780px** for phone screenshots or **1280×720px** for landscape/feature screenshots.
 
 ### App Screens
 
