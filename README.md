@@ -127,42 +127,42 @@ Camera Feed ➔ MediaPipe Face Mesh (Liveness WebView) ➔ JPEG Decode (jpeg-js)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│  1. SCANNING      │ Camera captures low-res JPEG every ~100ms              │
-│  2. LIVENESS      │ MediaPipe WebView extracts 468 face landmarks          │
-│                   │ ├── Passive 3D depth check (z-coord std dev)           │
-│                   │ ├── Active challenge: BLINK (EAR < 0.33)              │
-│                   │ └── Active challenge: HEAD_TURN (yaw > 0.12)          │
-│  3. MATCHING      │ 3-shot averaged embedding via GhostFaceNet INT8       │
-│                   │ ├── Cosine similarity against encrypted DB             │
-│                   │ ├── Multi-user: margin ≥ 0.05, ratio ≥ 1.08           │
-│                   │ └── Single-user: threshold ≥ 0.75 (borderline retry)  │
-│  4. AUTHENTICATED │ Auth log stored in SQLite, background AWS sync         │
-│     or FAILED     │ Haptic feedback, retry available                       │
+│  1. SCANNING      │ Camera captures low-res JPEG every ~100ms               │
+│  2. LIVENESS      │ MediaPipe WebView extracts 468 face landmarks           │
+│                   │ ├── Passive 3D depth check (z-coord std dev)            │
+│                   │ ├── Active challenge: BLINK (EAR < 0.33)                │
+│                   │ └── Active challenge: HEAD_TURN (yaw > 0.12)            │
+│  3. MATCHING      │ 3-shot averaged embedding via GhostFaceNet INT8         │
+│                   │ ├── Cosine similarity against encrypted DB              │
+│                   │ ├── Multi-user: margin ≥ 0.05, ratio ≥ 1.08             │
+│                   │ └── Single-user: threshold ≥ 0.75 (borderline retry)    │
+│  4. AUTHENTICATED │ Auth log stored in SQLite, background AWS sync          │
+│     or FAILED     │ Haptic feedback, retry available                        │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### High-Level System Architecture
 
 ```
-┌──────────────────────────────────────────────────────────────────────┐
-│                        EdgeLock Mobile App                           │
-│                                                                      │
+┌─────────────────────────────────────────────────────────────────────┐
+│                        EdgeLock Mobile App                          │
+│                                                                     │
 │  ┌──────────┐  ┌──────────────┐  ┌────────────────┐                 │
-│  │  Camera   │→│  MediaPipe   │→│  GhostFaceNet  │                 │
-│  │  Module   │  │  WebView     │  │  TFLite INT8   │                 │
-│  │ (640×480) │  │  (468 pts)   │  │  (112×112 in)  │                 │
+│  │  Camera   │→│  MediaPipe   │→│  GhostFaceNet  │                  │
+│  │  Module   │  │  WebView     │  │  TFLite INT8   │                │
+│  │ (640×480) │  │  (468 pts)   │  │  (112×112 in)  │                │
 │  └──────────┘  └──────────────┘  └───────┬────────┘                 │
-│                                          │                           │
-│                                   512-dim embedding                  │
-│                                          │                           │
-│  ┌──────────────────────────────────────┐│                           │
-│  │         Encrypted SQLite DB          ││                           │
-│  │  ┌──────────────┐ ┌──────────────┐  │▼                           │
-│  │  │ enrolled_faces│ │  auth_logs   │←── Cosine Similarity Match   │
-│  │  │ (AES-256 CBC)│ │ (GPS tagged) │  │                           │
-│  │  └──────────────┘ └──────┬───────┘  │                           │
-│  └──────────────────────────┼──────────┘                           │
-│                              │                                       │
+│                                          │                          │
+│                                   512-dim embedding                 │
+│                                          │                          │
+│  ┌──────────────────────────────────────┐│                          │
+│  │         Encrypted SQLite DB          ││                          │
+│  │  ┌──────────────┐ ┌──────────────┐   │▼                          │
+│  │  │enrolled_faces│ │  auth_logs   │←── Cosine Similarity Match    │
+│  │  │ (AES-256 CBC)│ │ (GPS tagged) │  │                            │
+│  │  └──────────────┘ └──────┬───────┘  │                            │
+│  └──────────────────────────┼──────────┘                            │
+│                              │                                      │
 │                    ┌─────────▼─────────┐                            │
 │                    │  AWS Sync Queue   │                            │
 │                    │ (Zero-Loss Purge) │                            │
@@ -789,16 +789,6 @@ If any stage fails or times out, the app displays a red error screen with the fa
 | TypeScript Check | `npm run ts:check` | Run `tsc` compiler (no emit, strict mode) |
 | Prebuild | `npm run prebuild` | Generate native iOS/Android projects |
 | Test | `npm test` | Run full Jest test suite |
-
----
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
 
 ---
 

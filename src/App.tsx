@@ -6,11 +6,15 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ActivityIndicator, View, Text } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { useNetworkStatus } from './hooks/useNetworkStatus';
+import * as SplashScreen from 'expo-splash-screen';
 import DemoAuthScreen from './screens/DemoAuthScreen';
 import EnrollmentScreen from './screens/EnrollmentScreen';
 import { initializeDatabase } from './services/database/sqlite';
 import { initRecognitionModel } from './services/ai/recognition';
 import { ensureMediaPipeAssets, getMediaPipeHTMLUri, handleWebViewMessage, setWebViewRef } from './services/ai/mediapipeLandmarks';
+
+// Keep native splash screen visible while app resources are initializing
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 const Stack = createStackNavigator();
 
@@ -56,11 +60,13 @@ export default function App() {
 
         clearTimeout(timeoutId);
         setIsReady(true);
+        await SplashScreen.hideAsync().catch(() => {});
       } catch (err: any) {
         clearTimeout(timeoutId);
         const msg = err?.message || String(err);
         setDbError(`[${currentStage}] ${msg}`);
         console.error('Startup failed:', err);
+        await SplashScreen.hideAsync().catch(() => {});
       }
     };
 
@@ -91,9 +97,9 @@ export default function App() {
   if (!isReady) {
     return (
       <SafeAreaProvider>
-        <View style={{ flex: 1, backgroundColor: '#ffffff', alignItems: 'center', justifyContent: 'center' }}>
-          <ActivityIndicator size="large" color="#1a237e" />
-          <Text style={{ marginTop: 16, color: '#1a237e', fontWeight: 'bold' }}>
+        <View style={{ flex: 1, backgroundColor: '#1a237e', alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator size="large" color="#ffffff" />
+          <Text style={{ marginTop: 16, color: '#ffffff', fontWeight: 'bold' }}>
             {progress > 0 ? `Downloading AI models... ${progress}%` : (stage || 'Initializing...')}
           </Text>
         </View>
